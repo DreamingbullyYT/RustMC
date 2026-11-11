@@ -52,3 +52,9 @@ This is still the repository/bootstrap stage, not a working Android build.
 The six-hour upstream tracking and patch-application pipeline is being established;
 the Android adapter, lifecycle integration, packaging, and APK pipeline remain
 to be implemented and tested.
+
+## Direct repository edit test
+
+GitHub write access was verified by updating this README directly through the
+repository connection on 2026-11-11. This section can be removed once the
+connection test is no longer needed.
