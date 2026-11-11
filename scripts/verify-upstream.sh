@@ -2,8 +2,15 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-EXPECTED=687f3f6d3f2935f3198256de8f3820c5a6c94454
+LOCK="$ROOT/UPSTREAM.lock"
+EXPECTED=$(sed -n 's/.*"commit": *"\([0-9a-f]*\)".*/\1/p' "$LOCK")
+EXPECTED_TREE=$(sed -n 's/.*"tree": *"\([0-9a-f]*\)".*/\1/p' "$LOCK")
 MODULE="$ROOT/upstream/horizon"
+
+if [ -z "$EXPECTED" ] || [ -z "$EXPECTED_TREE" ]; then
+  echo "UPSTREAM.lock is missing its commit or tree SHA" >&2
+  exit 1
+fi
 
 if [ ! -d "$MODULE/.git" ] && [ ! -f "$MODULE/.git" ]; then
   echo "Horizon submodule is missing. Run: git submodule update --init --recursive" >&2
@@ -11,14 +18,9 @@ if [ ! -d "$MODULE/.git" ] && [ ! -f "$MODULE/.git" ]; then
 fi
 
 ACTUAL=$(git -C "$MODULE" rev-parse HEAD)
-if [ "$ACTUAL" != "$EXPECTED" ]; then
-  echo "Wrong Horizon revision: expected $EXPECTED, got $ACTUAL" >&2
-  exit 1
-fi
-
-LOCK_COMMIT=$(sed -n 's/.*"commit": *"\([0-9a-f]*\)".*/\1/p' "$ROOT/UPSTREAM.lock")
-if [ "$LOCK_COMMIT" != "$EXPECTED" ]; then
-  echo "UPSTREAM.lock does not match the pinned engine revision" >&2
+ACTUAL_TREE=$(git -C "$MODULE" rev-parse 'HEAD^{tree}')
+if [ "$ACTUAL" != "$EXPECTED" ] || [ "$ACTUAL_TREE" != "$EXPECTED_TREE" ]; then
+  echo "Wrong Horizon checkout: expected $EXPECTED ($EXPECTED_TREE), got $ACTUAL ($ACTUAL_TREE)" >&2
   exit 1
 fi
 
