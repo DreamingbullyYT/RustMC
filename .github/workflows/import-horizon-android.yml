@@ -1,15 +1,12 @@
 name: Import Horizon-Android
 
-on:
-  push:
-    branches: [main]
+on: push
 
 permissions:
   contents: write
 
 jobs:
   import:
-    if: github.event_name == 'push' && github.event.head_commit.message == 'chore: import Horizon-Android source into main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout selected Android source
