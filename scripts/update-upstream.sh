@@ -11,7 +11,14 @@ if [ ! -d "$MODULE/.git" ] && [ ! -f "$MODULE/.git" ]; then
   git -C "$ROOT" submodule update --init --recursive upstream/horizon
 fi
 
-git -C "$MODULE" fetch --no-tags origin "$UPSTREAM_BRANCH"
+# Actions may check submodules out shallowly. Fetch full history before checking
+# ancestry so that a normal upstream advance is not mistaken for a rewrite.
+if [ "$(git -C "$MODULE" rev-parse --is-shallow-repository)" = "true" ]; then
+  git -C "$MODULE" fetch --no-tags --unshallow origin "$UPSTREAM_BRANCH"
+else
+  git -C "$MODULE" fetch --no-tags origin "$UPSTREAM_BRANCH"
+fi
+
 TARGET=$(git -C "$MODULE" rev-parse FETCH_HEAD)
 CURRENT=$(git -C "$MODULE" rev-parse HEAD)
 
@@ -45,7 +52,7 @@ with open(path, "w", encoding="utf-8") as stream:
 PY
 
 # Apply the Android patch series only after the exact upstream revision is selected.
-# A failed patch is fatal: never silently skip an incompatible Android change.
+# A failed patch is fatal: never silently skip or rewrite an incompatible patch.
 PATCH_DIR="$ROOT/patches"
 if [ -d "$PATCH_DIR" ]; then
   find "$PATCH_DIR" -maxdepth 1 -type f -name '*.patch' -print | sort |

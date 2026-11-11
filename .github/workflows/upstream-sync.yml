@@ -39,7 +39,9 @@ jobs:
       - name: Commit upstream revision when changed
         shell: bash
         run: |
-          if git diff --quiet -- UPSTREAM.lock upstream/horizon; then
+          # Ignore patch-applied working-tree changes inside the submodule.
+          # The superproject should commit only a new upstream gitlink + lock.
+          if git diff --quiet --ignore-submodules=dirty -- UPSTREAM.lock upstream/horizon; then
             echo "No upstream changes to commit."
             exit 0
           fi
