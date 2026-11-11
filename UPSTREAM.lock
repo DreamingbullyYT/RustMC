@@ -2,6 +2,6 @@
   "repository": "https://github.com/horizon-rust/horizon.git",
   "commit": "69ba5a7b63642555fdd3461defcb53c265967d59",
   "tree": "61ea08849f2d4e6b400513f6392c9ed3eef9b4bd",
-  "submodule_path": "upstream/horizon",
+  "vendor_path": "upstream/horizon",
   "license": "MIT"
 }
