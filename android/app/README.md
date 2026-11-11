@@ -1,24 +1,28 @@
-# Android app shell
+# Android app module
 
-This is the isolated Android packaging layer for rustMC. It deliberately does not modify or vendor
-Horizon engine sources.
+This is the isolated Android application layer for rustMC. The launcher UI, Android Activity
+lifecycle and game native surface live here; the pinned Horizon engine remains untouched.
 
 ## Current scope
 
-- Android Gradle application module (AGP 8.11.1, compile/target SDK 35).
-- NativeActivity entry point and a minimal Java lifecycle adapter.
-- arm64-v8a packaging configuration.
-- Optional Vulkan hardware feature declaration.
+- Jetpack Compose launcher with Play, Files and Settings destinations.
+- A separate `NativeActivity` for the game; the launcher starts it explicitly.
+- Internal game-data file browser rooted at the app's private files directory.
+- Persisted "keep screen on while playing" preference, applied by the game Activity.
+- arm64-v8a packaging configuration and optional Vulkan hardware declaration.
+
+The update control is intentionally absent until an updater is actually connected. Mod, shader,
+touch-layout and renderer screens are not represented as functional controls yet; they need the
+native/runtime bridge and compatibility work first.
 
 ## Native library contract
 
-The app expects the Rust Android target to produce:
+The game Activity expects the Rust Android target to produce:
 
 `app/src/main/jniLibs/arm64-v8a/libhorizon_android.so`
 
-That library is **not included yet**. The Rust JNI/event-loop bridge has to be ported against the
-pinned Horizon revision before this APK can launch the game. This module is therefore a packaging
-scaffold, not a claimed working APK.
+That library is **not included yet**. The Compose launcher can be packaged independently, but
+launching the game requires the matching native library. This is not yet a runnable game APK.
 
 ## Build
 
@@ -34,7 +38,7 @@ device. Device testing requires the matching `libhorizon_android.so`.
 ## Porting constraints
 
 - Do not add Android-specific code to `game.rs`.
-- Keep JNI, Activity lifecycle, SAF, storage, launcher and toolchain code in this Android layer
+- Keep JNI, Activity lifecycle, storage, launcher and toolchain code in this Android layer
   or dedicated Android crates.
 - Do not import the Android source branch's modified `winit`, `wgpu` or `naga` trees wholesale.
 - Only introduce a tiny upstream patch after proving a missing public extension point.

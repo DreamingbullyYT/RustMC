@@ -1,21 +1,21 @@
 package dev.horizon.android;
 
 /**
- * Minimal Android NativeActivity host.
- *
- * The Rust entry point owns the game loop, rendering, input and platform services.
- * Keep this class limited to Android Activity lifecycle integration.
+ * Native game surface. The Compose launcher is hosted by LauncherActivity;
+ * Rust owns the game loop, rendering, input and platform services.
  */
 public final class HorizonActivity extends android.app.NativeActivity {
     @Override
     protected void onCreate(android.os.Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        applyDisplayPreferences();
         preferHighestRefreshRate();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        applyDisplayPreferences();
         preferHighestRefreshRate();
     }
 
@@ -24,6 +24,16 @@ public final class HorizonActivity extends android.app.NativeActivity {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
             preferHighestRefreshRate();
+        }
+    }
+
+    private void applyDisplayPreferences() {
+        boolean keepScreenOn = getSharedPreferences("launcher", MODE_PRIVATE)
+                .getBoolean("keep_screen_on", true);
+        if (keepScreenOn) {
+            getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
     }
 

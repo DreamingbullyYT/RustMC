@@ -29,20 +29,15 @@
                 android:name="android.app.func_name"
                 android:value="android_main" />
         </activity>
-        <activity-alias
-            android:name=".Launcher"
-            android:targetActivity=".HorizonActivity"
-            android:exported="true">
-            <meta-data
-                android:name="android.app.lib_name"
-                android:value="horizon_android" />
-            <meta-data
-                android:name="android.app.func_name"
-                android:value="android_main" />
+        <activity
+            android:name=".LauncherActivity"
+            android:exported="true"
+            android:screenOrientation="unspecified"
+            android:theme="@style/HorizonGameTheme">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity-alias>
+        </activity>
     </application>
 </manifest>
