@@ -1,0 +1,60 @@
+# Android port audit
+
+Status: source inventory only; no Android source has been copied into the pinned engine.
+
+## Fixed upstream baseline
+
+- Repository: https://github.com/horizon-rust/horizon
+- Commit: `69ba5a7b63642555fdd3461defcb53c265967d59`
+- Tree: `61ea08849f2d4e6b400513f6392c9ed3eef9b4bd`
+
+The `upstream/horizon` gitlink and `UPSTREAM.lock` remain pinned to this revision. Do not edit the submodule working tree as part of Android development.
+
+## Android source snapshot
+
+- Repository: https://github.com/GoyDevv/Horizon-Android
+- Branch: `android`
+- Commit: `ae4c85dc5b31da2078ee1e1009a53ced7d7ed1ba`
+
+The source snapshot has 5,688 tree entries; the pinned upstream snapshot has 6,653. A direct tree comparison reports 1,308 source-only entries and 1,932 paths with different object IDs. This is not a clean patch count: the two snapshots are not at the same base revision, so the differences include upstream drift and unrelated project history. Do not bulk-copy the source tree or interpret all changed files as Android patches.
+
+## High-risk findings
+
+The Android source modifies broad core areas, including `crates/horizon-client/src/game.rs`, many `horizon-client` and `horizon-client-render` files, plus `third_party/winit`, `third_party/wgpu-hal`, and `third_party/naga`. It also carries substantial changes in world/core/protocol crates. Those need individual provenance and necessity checks.
+
+The source has useful standalone Android areas:
+- `packaging/android/` — Gradle, manifest, Activity, Compose UI and build scripts.
+- `crates/horizon-android/` — Android support crate.
+- `crates/horizon-client/src/android/` and `android_main.rs` — Android platform services and entrypoint candidates.
+- `crates/horizon-client-render/src/touch/`, `touch.rs`, `android_gamepad.rs`, `android_runtime.rs` — input/control candidates.
+- `tools/android_*` and `tests/test_android_*` — build, diagnostics and regression tooling.
+- `crates/horizon-client/src/game/android_bundled/` — bundled mod payloads; inspect licenses and mod API compatibility before adopting.
+
+Some Android code is currently nested under Horizon crates. It may be moved into dedicated workspace crates/modules where public APIs permit, rather than retaining broad core edits.
+
+## Porting rules
+
+1. Keep the engine pinned at the baseline above until a deliberate upstream update is approved.
+2. Keep Android packaging, Java/Kotlin, JNI, lifecycle, storage, toolchain, input policy and launcher-specific services under `android/`.
+3. Reuse upstream touch/gamepad/runtime APIs where available; do not fork existing implementations.
+4. No `include!("game/android.rs")` or broad edits to `game.rs`. This is especially important because the mod/mixin pipeline rejects unsupported macro edits to that file.
+5. An upstream patch is allowed only for a proven missing extension point. It must be small, isolated, documented and stored as an ordered patch under `patches/`.
+6. Preserve HNMod/HMod/HShader compatibility by testing against the pinned engine and its actual mod APIs; do not infer compatibility from the Android source branch.
+7. Do not import third-party renderer/windowing forks unless a minimal reproducible Android build failure proves they are required.
+
+## Next extraction order
+
+1. Read the source Android manifest, Gradle configuration, native entrypoint and crate manifests; map their dependencies.
+2. Compare the Android event-loop integration against the pinned winit 0.30 API and implement the smallest context bridge outside `game.rs`.
+3. Port aarch64 Android compile support and build a smoke-test APK before importing UI or bundled mods.
+4. Port touch input by adapting `WindowEvent::Touch` into the existing input state machine, with pointer/lifecycle tests.
+5. Port SAF storage, launcher UI, updater, mod/shader integration and compiler as independent modules, one verified slice at a time.
+6. Record every unavoidable engine delta in `patches/`; run cross-builds and tests after each slice.
+
+## Verification status
+
+- Upstream pin: verified in repository metadata.
+- Android source inventory: completed.
+- Clean common-base diff: not established.
+- Android port: not yet applied.
+- Cross-compilation/APK/device verification: not yet performed.
