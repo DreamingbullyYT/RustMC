@@ -1,0 +1,43 @@
+name: Vendorize Horizon upstream
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vendorize-horizon
+  cancel-in-progress: false
+
+jobs:
+  vendorize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository with the pinned submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Verify pinned upstream and replace the gitlink with source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED=$(python3 -c 'import json; print(json.load(open("UPSTREAM.lock"))["commit"])')
+          ACTUAL=$(git -C upstream/horizon rev-parse HEAD)
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "Pinned Horizon mismatch: expected $EXPECTED, got $ACTUAL" >&2
+            exit 1
+          fi
+
+          test -f upstream/horizon/Cargo.toml
+          rm -rf upstream/horizon/.git
+          git rm --cached -f upstream/horizon
+          rm -f .gitmodules
+          git add -A -- upstream/horizon .gitmodules
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: vendor Horizon upstream source"
+          git push
