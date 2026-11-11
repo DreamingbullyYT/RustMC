@@ -18,6 +18,31 @@ The `upstream/horizon` gitlink and `UPSTREAM.lock` remain pinned to this revisio
 
 The source snapshot has 5,688 tree entries; the pinned upstream snapshot has 6,653. A direct tree comparison reports 1,308 source-only entries and 1,932 paths with different object IDs. This is not a clean patch count: the two snapshots are not at the same base revision, so the differences include upstream drift and unrelated project history. Do not bulk-copy the source tree or interpret all changed files as Android patches.
 
+## Provenance baseline and complete tree comparison
+
+The Android branch has a real common ancestor with Horizon: merge commit
+`da0b893b948740d4cdfc837b9e271386e046e553` explicitly merged published
+Horizon commit `8c02c0b8534e11b7bb8be14238b140a8534280a0`. The Android branch
+is 378 commits ahead of that base, with no commits behind it.
+
+Comparing the full Git trees at that common base and the Android head (not the
+unrelated current-upstream trees) gives:
+- 998 added files, 18 deleted files and 415 modified files.
+- The largest changed areas are `third_party/winit` (229 paths),
+  `tools/native-hook-fragments` (225), `crates/horizon-client` (197),
+  `crates/horizon-client-render` (99), and `crates/horizon-mod-sdk` (75).
+- There are also 35 files under `packaging/android`.
+
+This confirms the source branch is not a small Android overlay. It includes
+substantial engine evolution and tooling beyond the Android platform layer.
+The full tree comparison is the reliable inventory; the GitHub compare API's
+file listing is capped, so its partial file list must not be treated as complete.
+
+The current Android `crates/horizon-client/src/game.rs` is about 1,695 lines
+longer than the common-base file and contains Android-specific declarations
+and gameplay conditionals. It is explicitly excluded from bulk porting. The
+existing upstream `game.rs` stays unchanged.
+
 ## High-risk findings
 
 The Android source modifies broad core areas, including `crates/horizon-client/src/game.rs`, many `horizon-client` and `horizon-client-render` files, plus `third_party/winit`, `third_party/wgpu-hal`, and `third_party/naga`. It also carries substantial changes in world/core/protocol crates. Those need individual provenance and necessity checks.
