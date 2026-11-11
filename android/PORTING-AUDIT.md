@@ -16,7 +16,7 @@ The `upstream/horizon` gitlink and `UPSTREAM.lock` remain pinned to this revisio
 - Branch: `android`
 - Commit: `ae4c85dc5b31da2078ee1e1009a53ced7d7ed1ba`
 
-The source snapshot is a complete Horizon-derived tree, not a standalone Android app. Comparing it directly with the November 11 upstream pin is misleading because the snapshots have different bases and include unrelated upstream evolution. The meaningful source delta is measured against the common ancestor below.
+The source snapshot has 5,688 tree entries; the pinned upstream snapshot has 6,653. A direct tree comparison reports 1,308 source-only entries and 1,932 paths with different object IDs. This is not a clean patch count: the two snapshots are not at the same base revision, so the differences include upstream drift and unrelated project history. Do not bulk-copy the source tree or interpret all changed files as Android patches.
 
 ## Provenance baseline and complete tree comparison
 
@@ -80,7 +80,6 @@ Some Android code is currently nested under Horizon crates. It may be moved into
 
 - Upstream pin: verified in repository metadata.
 - Android source inventory: completed.
-- Common ancestor and full source tree delta: established (998 added, 18 deleted, 415 modified paths).
-- Android port: not yet applied.
+- Clean common-base diff: not established.
 - Android port: not yet applied.
 - Cross-compilation/APK/device verification: not yet performed.
