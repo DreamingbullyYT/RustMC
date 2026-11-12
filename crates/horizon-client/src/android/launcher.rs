@@ -359,10 +359,7 @@ impl Launcher {
         };
         let gui = game::UiResources {
             atlas: HudAtlas::build(&atlas_root)?,
-            panorama: Arc::new(horizon_client::gfx::panorama::Faces {
-                size: 1,
-                pixels: [0u8; 4].repeat(6),
-            }),
+            panorama: Arc::new(horizon_client::gfx::panorama::Faces::colour([96, 110, 111, 255])),
             sounds: Some(horizon_client::sound_events::SoundRegistry::load(
                 &atlas_root,
             )),
