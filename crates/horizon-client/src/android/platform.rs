@@ -520,7 +520,7 @@ pub fn poll() -> Vec<Output> {
             return vec![];
         }
         let out =
-            horizon_client::ime_edit::editor_changes(old, &new, MULTILINE.with(|mode| mode.get()));
+            crate::android_ime_edit::editor_changes(old, &new, MULTILINE.with(|mode| mode.get()));
         *old = new;
         out
     })
