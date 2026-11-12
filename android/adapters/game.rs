@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use winit::{application::ApplicationHandler, window::Window};
 
-use crate::horizon_client::{
+use crate::horizon_client_adapter::{
     Result,
     gfx::Renderer,
     graphics::GraphicsApi,
