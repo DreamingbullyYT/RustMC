@@ -13,8 +13,8 @@ use crate::horizon_client_adapter::{
 /// Resources used by the original Android launcher while the game is not active.
 pub struct UiResources {
     pub atlas: HudAtlas,
-    pub panorama: Arc<crate::horizon_client::gfx::panorama::Faces>,
-    pub sounds: Option<crate::horizon_client::sound_events::SoundRegistry>,
+    pub panorama: Arc<crate::horizon_client_adapter::gfx::panorama::Faces>,
+    pub sounds: Option<crate::horizon_client_adapter::sound_events::SoundRegistry>,
 }
 
 /// Build the same small renderer used by the original Android launcher's loading view.
@@ -22,14 +22,14 @@ pub fn loading_renderer(
     window: Arc<Window>,
     offscreen: bool,
     atlas: Option<&HudAtlas>,
-    panorama: Option<&crate::horizon_client::gfx::panorama::Faces>,
+    panorama: Option<&crate::horizon_client_adapter::gfx::panorama::Faces>,
     previous: Option<&Renderer>,
     api: GraphicsApi,
 ) -> Result<Renderer> {
     static FORCEFIELD: [u8; 4] = [0; 4];
     static EMPTY_HUD: [u8; 4] = [0, 0, 0, 255];
     static EMPTY_GLINT: [u8; 4] = [0; 4];
-    let empty_panorama = crate::horizon_client::gfx::panorama::Faces {
+    let empty_panorama = crate::horizon_client_adapter::gfx::panorama::Faces {
         size: 1,
         pixels: [0u8; 4].repeat(6),
     };
@@ -75,11 +75,11 @@ pub fn loading_renderer(
 /// Ask upstream to construct its existing loading/game ApplicationHandler.
 /// The Android launcher will host this handler on its one existing Winit loop.
 pub fn android_game(arguments: Vec<String>) -> Result<Box<dyn ApplicationHandler>> {
-    crate::horizon_client::game::create_application_handler(arguments)
+    crate::horizon_client_adapter::game::create_application_handler(arguments)
 }
 
 /// Upstream owns gameplay/mod lifecycle; there is no fork-side global registry to reset here.
 pub fn android_reset_bundled_mods() {
-    horizon_narrator::stop();
-    crate::horizon_client::discord_presence::stop();
+    horizon_narrator::clear();
+    crate::discord_presence::stop();
 }
