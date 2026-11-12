@@ -109,7 +109,7 @@ pub struct Config {
     #[serde(default)]
     pub max_fps_unlocked_v3: bool,
     #[serde(default)]
-    pub theme: horizon_client::ui_theme::LauncherThemeConfig,
+    pub theme: crate::android_ui_theme::LauncherThemeConfig,
 }
 
 fn default_true() -> bool {
@@ -150,12 +150,12 @@ impl Default for Config {
             preset_edit_mode: String::new(),
             max_fps_unlocked_v2: true,
             max_fps_unlocked_v3: true,
-            theme: horizon_client::ui_theme::LauncherThemeConfig::default(),
+            theme: crate::android_ui_theme::LauncherThemeConfig::default(),
         }
     }
 }
 
-pub use horizon_client::android_gamepad::InputMode as InputHost;
+pub use crate::android_gamepad::InputMode as InputHost;
 
 /// Android ActivityInfo orientations, independent of the device's natural axis.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -224,8 +224,8 @@ impl Config {
             if config.device.display_hz < 120 {
                 config.device.display_hz = 120;
             }
-            if config.theme.preset == horizon_client::ui_theme::ThemePreset::ObsidianViolet {
-                config.theme.apply_preset(horizon_client::ui_theme::ThemePreset::EmeraldForest);
+            if config.theme.preset == crate::android_ui_theme::ThemePreset::ObsidianViolet {
+                config.theme.apply_preset(crate::android_ui_theme::ThemePreset::EmeraldForest);
             }
             config.apply_experimental_to_game(home);
             let _ = config.save(home);
@@ -233,13 +233,13 @@ impl Config {
         config.name = truncate_player_name(&config.name);
         config.mod_source = crate::shader_catalog::Origin::Horizon;
         config.theme.sanitize();
-        horizon_client::ui_theme::set_active_theme(config.theme.resolve());
-        horizon_client::ui_theme::motion::set_reduced_motion(
+        crate::android_ui_theme::set_active_theme(config.theme.resolve());
+        crate::android_ui_theme::motion::set_reduced_motion(
             config.disable_launcher_animations
                 || config.super_perf_mode
                 || config.battery_perf_mode,
         );
-        horizon_client::ui_theme::motion::set_game_animations_disabled(
+        crate::android_ui_theme::motion::set_game_animations_disabled(
             config.disable_game_animations,
         );
         config
@@ -308,7 +308,7 @@ impl Config {
         let _ = std::fs::create_dir_all(&game);
         let options_path = game.join("options.txt");
         let mut settings = horizon_client::settings::Settings::load(&options_path);
-        horizon_client::ui_theme::motion::set_game_animations_disabled(
+        crate::android_ui_theme::motion::set_game_animations_disabled(
             self.disable_game_animations,
         );
         if self.disable_game_animations {
@@ -370,7 +370,7 @@ impl Config {
         }
         settings.save(&options_path);
         let touch_path = game.join("horizon-touch.json");
-        let mut touch_cfg = horizon_client::touch::Settings::load_from(&touch_path);
+        let mut touch_cfg = crate::touch::Settings::load_from(&touch_path);
         touch_cfg.disable_game_animations = self.disable_game_animations;
         touch_cfg.resolution_scale_percent = self.render_scale.percent().clamp(25, 100);
         touch_cfg.zero_latency_touch = self.zero_latency_touch;
@@ -442,10 +442,10 @@ impl Page {
     }
 }
 enum Reply {
-    Done(String, horizon_client::content_files::Kind),
+    Done(String, crate::content_files::Kind),
     PortDone(
         String,
-        Option<horizon_port_pack::android_port::AndroidPortResult>,
+        Option<crate::android_port::AndroidPortResult>,
         Vec<String>,
     ),
 }
@@ -625,12 +625,12 @@ impl InstalledFilter {
             Self::Shaders => "Shaders",
         }
     }
-    pub fn matches(self, kind: horizon_client::content_files::Kind) -> bool {
+    pub fn matches(self, kind: crate::content_files::Kind) -> bool {
         match self {
             Self::All => true,
-            Self::Mods => kind == horizon_client::content_files::Kind::Mods,
-            Self::Packs => kind == horizon_client::content_files::Kind::Packs,
-            Self::Shaders => kind == horizon_client::content_files::Kind::Shaders,
+            Self::Mods => kind == crate::content_files::Kind::Mods,
+            Self::Packs => kind == crate::content_files::Kind::Packs,
+            Self::Shaders => kind == crate::content_files::Kind::Shaders,
         }
     }
 }
@@ -730,7 +730,7 @@ pub struct Catalog {
     pub compiler_mode: CompilerMode,
     pub compiler_query: String,
     pub compiler_logs: Vec<String>,
-    pub last_port_result: Option<horizon_port_pack::android_port::AndroidPortResult>,
+    pub last_port_result: Option<crate::android_port::AndroidPortResult>,
     worker: Option<mpsc::Receiver<Result<Reply, String>>>,
     search_worker: Option<mpsc::Receiver<Result<Vec<Project>, String>>>,
     icon_worker: Option<mpsc::Receiver<IconData>>,
@@ -738,7 +738,7 @@ pub struct Catalog {
 }
 #[derive(Clone)]
 pub struct LocalItem {
-    pub kind: horizon_client::content_files::Kind,
+    pub kind: crate::content_files::Kind,
     pub file: String,
     pub title: String,
     pub enabled: bool,
@@ -811,7 +811,7 @@ impl Catalog {
         result.refresh(home);
         result
     }
-    pub fn show_installed(&mut self, kind: Option<horizon_client::content_files::Kind>) {
+    pub fn show_installed(&mut self, kind: Option<crate::content_files::Kind>) {
         self.searches.cancel_interest();
         self.page = Page::Installed;
         self.scroll = 0.0;
@@ -819,13 +819,13 @@ impl Catalog {
         if let Some(k) = kind {
             self.installed_sub_tab = InstalledSubTab::Library;
             self.installed_filter = match k {
-                horizon_client::content_files::Kind::Mods => InstalledFilter::Mods,
-                horizon_client::content_files::Kind::Packs => InstalledFilter::Packs,
-                horizon_client::content_files::Kind::Shaders => InstalledFilter::Shaders,
+                crate::content_files::Kind::Mods => InstalledFilter::Mods,
+                crate::content_files::Kind::Packs => InstalledFilter::Packs,
+                crate::content_files::Kind::Shaders => InstalledFilter::Shaders,
             };
         }
         self.sections = [true; 3];
-        if let Some(i) = horizon_client::content_files::Kind::ALL
+        if let Some(i) = crate::content_files::Kind::ALL
             .iter()
             .position(|k| Some(*k) == kind)
         {
@@ -846,7 +846,7 @@ impl Catalog {
         self.bundled_enabled = on.enabled.difference(&on.disabled).cloned().collect();
         let settings = horizon_client::settings::Settings::load(&game.join("options.txt"));
         self.local.clear();
-        for kind in horizon_client::content_files::Kind::ALL {
+        for kind in crate::content_files::Kind::ALL {
             let dir = game.join(kind.folder());
             if std::fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_symlink()) {
                 continue;
@@ -860,8 +860,8 @@ impl Catalog {
                 }
                 let name = entry.file_name().to_string_lossy().into_owned();
                 if ft.is_dir() {
-                    if kind == horizon_client::content_files::Kind::Mods
-                        && horizon_client::content_files::plain_name(&name)
+                    if kind == crate::content_files::Kind::Mods
+                        && crate::content_files::plain_name(&name)
                         && entry.path().join("horizon-mod.toml").is_file()
                     {
                         let rel = format!("horizon-mods/{name}");
@@ -882,21 +882,21 @@ impl Catalog {
                     continue;
                 }
                 let lower = name.to_ascii_lowercase();
-                let valid = horizon_client::content_files::plain_name(&name)
+                let valid = crate::content_files::plain_name(&name)
                     && (kind.accepts(&name)
-                        || (kind == horizon_client::content_files::Kind::Mods
+                        || (kind == crate::content_files::Kind::Mods
                             && (lower.ends_with(".jar") || lower.ends_with(".hnmod"))));
                 if !valid {
                     continue;
                 }
                 let enabled = match kind {
-                    horizon_client::content_files::Kind::Packs => {
+                    crate::content_files::Kind::Packs => {
                         settings.resource_packs.contains(&format!("file/{name}"))
                     }
-                    horizon_client::content_files::Kind::Shaders => {
+                    crate::content_files::Kind::Shaders => {
                         settings.horizon.shader_pack == name
                     }
-                    horizon_client::content_files::Kind::Mods => name
+                    crate::content_files::Kind::Mods => name
                         .strip_suffix(".hmod")
                         .or_else(|| name.strip_suffix(".hnmod"))
                         .or_else(|| name.strip_suffix(".jar"))
@@ -904,9 +904,9 @@ impl Catalog {
                 };
                 let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
                 let badge = match kind {
-                    horizon_client::content_files::Kind::Mods => "MOD",
-                    horizon_client::content_files::Kind::Packs => "PACK",
-                    horizon_client::content_files::Kind::Shaders => "SHADER",
+                    crate::content_files::Kind::Mods => "MOD",
+                    crate::content_files::Kind::Packs => "PACK",
+                    crate::content_files::Kind::Shaders => "SHADER",
                 };
                 let ext_tag = if name.ends_with(".hmod") {
                     "Horizon Mod (.hmod)"
@@ -914,14 +914,14 @@ impl Catalog {
                     "Horizon Native Mod (.hnmod)"
                 } else if name.ends_with(".jar") {
                     let stem = name.strip_suffix(".jar").unwrap_or(&name);
-                    let cid = horizon_client::jar_transpiler::sanitize_mod_id(stem);
+                    let cid = crate::jar_transpiler::sanitize_mod_id(stem);
                     if !game.join("horizon-native-mods").join(format!("{cid}.hnmod")).is_file() {
-                        let _ = horizon_client::jar_transpiler::transpile_jar_to_horizon_mods(&entry.path(), &game);
+                        let _ = crate::jar_transpiler::transpile_jar_to_horizon_mods(&entry.path(), &game);
                     }
                     "Java Mod (.jar -> .hnmod)"
                 } else if name.ends_with(".hshader") {
                     "Horizon Shader (.hshader)"
-                } else if kind == horizon_client::content_files::Kind::Shaders {
+                } else if kind == crate::content_files::Kind::Shaders {
                     "Shader Pack (.zip)"
                 } else {
                     "Resource Pack (.zip)"
@@ -979,7 +979,7 @@ impl Catalog {
                 file_name
             );
             self.local.push(LocalItem {
-                kind: horizon_client::content_files::Kind::Mods,
+                kind: crate::content_files::Kind::Mods,
                 file: e.file.clone(),
                 title: format!("{} ({})", e.title, e.version),
                 enabled: on.enabled.contains(mod_id) && !on.disabled.contains(mod_id),
@@ -1000,7 +1000,7 @@ impl Catalog {
                     continue;
                 }
                 let name = entry.file_name().to_string_lossy().into_owned();
-                if !horizon_client::content_files::plain_name(&name)
+                if !crate::content_files::plain_name(&name)
                     || (!name.ends_with(".hnmod")
                         && !name.ends_with(".hmod")
                         && !name.ends_with(".jar"))
@@ -1022,18 +1022,18 @@ impl Catalog {
                     .unwrap_or(&name);
                 let is_on = if name.ends_with(".hnmod") {
                     if !on.enabled.contains(mod_id) && !on.disabled.contains(mod_id) {
-                        horizon_client::jar_transpiler::enable_mod_in_profile(&game, mod_id);
+                        crate::jar_transpiler::enable_mod_in_profile(&game, mod_id);
                     }
                     !on.disabled.contains(mod_id)
                 } else {
                     on.enabled.contains(mod_id) && !on.disabled.contains(mod_id)
                 };
-                let display_title = horizon_client::jar_transpiler::canonical_horizon_mod_meta(mod_id)
+                let display_title = crate::jar_transpiler::canonical_horizon_mod_meta(mod_id)
                     .map(|(t, _)| t.to_owned())
-                    .unwrap_or_else(|| horizon_client::jar_transpiler::title_case_id(mod_id));
+                    .unwrap_or_else(|| crate::jar_transpiler::title_case_id(mod_id));
                 let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
                 self.local.push(LocalItem {
-                    kind: horizon_client::content_files::Kind::Mods,
+                    kind: crate::content_files::Kind::Mods,
                     file: rel,
                     title: display_title,
                     enabled: is_on,
@@ -1052,7 +1052,7 @@ impl Catalog {
                 let b_file = format!("builtin:{b_id}");
                 if !self.local.iter().any(|item| item.file == b_file) {
                     self.local.push(LocalItem {
-                        kind: horizon_client::content_files::Kind::Mods,
+                        kind: crate::content_files::Kind::Mods,
                         file: b_file,
                         title: b_title.to_owned(),
                         enabled: true,
@@ -1068,7 +1068,7 @@ impl Catalog {
         let mut seen_mod_ids: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
         let mut deduped: Vec<LocalItem> = Vec::with_capacity(self.local.len());
         for mut item in self.local.drain(..) {
-            if item.kind == horizon_client::content_files::Kind::Mods
+            if item.kind == crate::content_files::Kind::Mods
                 && !item.file.starts_with("builtin:")
             {
                 let raw_id = item
@@ -1081,7 +1081,7 @@ impl Catalog {
                     .or_else(|| raw_id.strip_suffix(".hmod"))
                     .or_else(|| raw_id.strip_suffix(".jar"))
                     .unwrap_or(raw_id);
-                let canon_id = horizon_client::jar_transpiler::sanitize_mod_id(raw_id);
+                let canon_id = crate::jar_transpiler::sanitize_mod_id(raw_id);
                 let has_hnmod = game
                     .join("horizon-native-mods")
                     .join(format!("{canon_id}.hnmod"))
@@ -1126,7 +1126,7 @@ impl Catalog {
                 .or_else(|| raw_id.strip_suffix(".hshader"))
                 .or_else(|| raw_id.strip_suffix(".zip"))
                 .unwrap_or(raw_id);
-            let canon_id = horizon_client::jar_transpiler::sanitize_mod_id(raw_id);
+            let canon_id = crate::jar_transpiler::sanitize_mod_id(raw_id);
             if self.icons.contains_key(&canon_id) || self.icons.contains_key(&item.file) {
                 continue;
             }
@@ -1432,7 +1432,7 @@ impl Catalog {
             .any(|(source, id)| *source == project.source && *id == project.id)
             || (project.kind == Kind::Mod
                 && self.local.iter().any(|item| {
-                    item.kind == horizon_client::content_files::Kind::Mods
+                    item.kind == crate::content_files::Kind::Mods
                         && (item.file == format!("{}.hmod", project.id)
                             || item.file == format!("{}.jar", project.slug)
                             || item.file == format!("horizon-mods/{}", project.id)
@@ -1441,7 +1441,7 @@ impl Catalog {
                 }))
             || (project.kind == Kind::Shader
                 && self.local.iter().any(|item| {
-                    item.kind == horizon_client::content_files::Kind::Shaders
+                    item.kind == crate::content_files::Kind::Shaders
                         && (item.file == format!("{}.hshader", project.id)
                             || item.file == format!("{}-1.0.0.hshader", project.id)
                             || item.file == format!("{}.zip", project.slug))
@@ -1649,12 +1649,12 @@ impl Catalog {
                 .or_else(|| raw_id.strip_suffix(".hshader"))
                 .or_else(|| raw_id.strip_suffix(".zip"))
                 .unwrap_or(raw_id);
-            let canon_id = horizon_client::jar_transpiler::sanitize_mod_id(raw_id);
+            let canon_id = crate::jar_transpiler::sanitize_mod_id(raw_id);
             if !self.icons.contains_key(&canon_id) && !self.icons.contains_key(&item.file) {
                 let b_kind = match item.kind {
-                    horizon_client::content_files::Kind::Mods => Kind::Mod,
-                    horizon_client::content_files::Kind::Packs => Kind::ResourcePack,
-                    horizon_client::content_files::Kind::Shaders => Kind::Shader,
+                    crate::content_files::Kind::Mods => Kind::Mod,
+                    crate::content_files::Kind::Packs => Kind::ResourcePack,
+                    crate::content_files::Kind::Shaders => Kind::Shader,
                 };
                 let clean_q = item.title.split('(').next().unwrap_or(&item.title).trim().to_owned();
                 raw_tasks.push((canon_id, clean_q, None, b_kind, browser::SourceId::Horizon));
@@ -2064,7 +2064,7 @@ impl Catalog {
                     .split_whitespace()
                     .map(|w| w.to_lowercase())
                     .collect();
-                for (id, title, summary, downloads) in horizon_client::jar_transpiler::all_horizon_catalog_mods() {
+                for (id, title, summary, downloads) in crate::jar_transpiler::all_horizon_catalog_mods() {
                     if horizon_client::mod_list::ANDROID_BUNDLED
                         .iter()
                         .any(|(bid, _, _)| *bid == id)
@@ -2143,7 +2143,7 @@ impl Catalog {
                         "Installed {}. Enable it in Installed after reviewing its capabilities in game Mods.",
                         package.manifest.name
                     ),
-                    horizon_client::content_files::Kind::Mods,
+                    crate::content_files::Kind::Mods,
                 ))
             })();
             let _ = std::fs::remove_file(stage);
@@ -2217,21 +2217,21 @@ impl Catalog {
                         for e in &entries {
                             let p = game.join(&e.file);
                             if (e.file.ends_with(".hnmod") || e.file.ends_with(".hmod")) && p.is_file() {
-                                if horizon_client::jar_transpiler::compile_hnmod_bundle_realtime(&p, &game).is_ok() {
+                                if crate::jar_transpiler::compile_hnmod_bundle_realtime(&p, &game).is_ok() {
                                     compiled_any = true;
                                 }
                             }
                         }
                         if !compiled_any {
-                            let _ = horizon_client::jar_transpiler::install_builtin_horizon_mod(&project.id, &game);
+                            let _ = crate::jar_transpiler::install_builtin_horizon_mod(&project.id, &game);
                         }
-                        let clean_id = horizon_client::jar_transpiler::sanitize_mod_id(&project.id);
-                        horizon_client::jar_transpiler::enable_mod_in_profile(&game, &clean_id);
+                        let clean_id = crate::jar_transpiler::sanitize_mod_id(&project.id);
+                        crate::jar_transpiler::enable_mod_in_profile(&game, &clean_id);
                         entries.len()
                     }
                     Err(_) => {
                         report(&format!("Installing {} (.hnmod)...", project.title), 0.55);
-                        let info = horizon_client::jar_transpiler::install_builtin_horizon_mod(&project.id, &game)?;
+                        let info = crate::jar_transpiler::install_builtin_horizon_mod(&project.id, &game)?;
                         let mut list = Installed::load(&game);
                         list.entries.retain(|e| !(e.source == project.source && e.project == project.id));
                         list.entries.push(browser::installed::Entry {
@@ -2270,9 +2270,9 @@ impl Catalog {
             Ok(Reply::Done(
                 format!("Installed {count} item(s). Open Play to load this profile."),
                 match project.kind {
-                    Kind::Mod => horizon_client::content_files::Kind::Mods,
-                    Kind::Shader => horizon_client::content_files::Kind::Shaders,
-                    _ => horizon_client::content_files::Kind::Packs,
+                    Kind::Mod => crate::content_files::Kind::Mods,
+                    Kind::Shader => crate::content_files::Kind::Shaders,
+                    _ => crate::content_files::Kind::Packs,
                 },
             ))
         });
@@ -2285,7 +2285,7 @@ impl Catalog {
         let path = game.join("options.txt");
         let mut settings = horizon_client::settings::Settings::load(&path);
         match item.kind {
-            horizon_client::content_files::Kind::Mods => {
+            crate::content_files::Kind::Mods => {
                 let mut on = horizon_client::mod_list::ModList::load(&game);
                 if let Some(bid) = item.file.strip_prefix("builtin:") {
                     if item.enabled {
@@ -2294,7 +2294,7 @@ impl Catalog {
                     } else {
                         on.disabled.remove(bid);
                         on.enabled.insert(bid.to_owned());
-                        let _ = horizon_client::jar_transpiler::install_builtin_horizon_mod(bid, &game);
+                        let _ = crate::jar_transpiler::install_builtin_horizon_mod(bid, &game);
                     }
                     on.save(&game);
                     self.status = "Mod updated and ready in-game".into();
@@ -2316,7 +2316,7 @@ impl Catalog {
                     .filter(|&i| raw_id[i + 1..].chars().next().is_some_and(|c| c.is_ascii_digit()))
                     .map(|i| &raw_id[..i])
                     .unwrap_or(raw_id);
-                let clean_id = horizon_client::jar_transpiler::sanitize_mod_id(base_id);
+                let clean_id = crate::jar_transpiler::sanitize_mod_id(base_id);
                 for id in [raw_id, base_id, clean_id.as_str()] {
                     if item.enabled {
                         on.enabled.remove(id);
@@ -2328,7 +2328,7 @@ impl Catalog {
                 }
                 on.save(&game);
             }
-            horizon_client::content_files::Kind::Packs => {
+            crate::content_files::Kind::Packs => {
                 let id = format!("file/{}", item.file);
                 if item.enabled {
                     settings.resource_packs.retain(|p| p != &id);
@@ -2337,7 +2337,7 @@ impl Catalog {
                 }
                 settings.save(&path);
             }
-            horizon_client::content_files::Kind::Shaders => {
+            crate::content_files::Kind::Shaders => {
                 settings.horizon.shader_pack = if item.enabled {
                     String::new()
                 } else {
@@ -2410,7 +2410,7 @@ impl Catalog {
                 on.save(&game);
                 return Ok(());
             }
-            if !horizon_client::content_files::plain_name(&item.file) {
+            if !crate::content_files::plain_name(&item.file) {
                 return Err("Invalid content filename".into());
             }
             let dir = game.join(item.kind.folder());
@@ -2435,18 +2435,18 @@ impl Catalog {
             installed.save(&game)?;
             let path = game.join("options.txt");
             let mut settings = horizon_client::settings::Settings::load(&path);
-            if item.kind == horizon_client::content_files::Kind::Packs {
+            if item.kind == crate::content_files::Kind::Packs {
                 settings
                     .resource_packs
                     .retain(|p| p != &format!("file/{}", item.file));
             }
-            if item.kind == horizon_client::content_files::Kind::Shaders
+            if item.kind == crate::content_files::Kind::Shaders
                 && settings.horizon.shader_pack == item.file
             {
                 settings.horizon.shader_pack.clear();
             }
             settings.save(&path);
-            if item.kind == horizon_client::content_files::Kind::Mods {
+            if item.kind == crate::content_files::Kind::Mods {
                 let mut on = horizon_client::mod_list::ModList::load(&game);
                 if let Some(id) = item
                     .file
@@ -2487,10 +2487,10 @@ impl Catalog {
     /// Runs `horizon-port-pack` natively on Android from the Compiler tab's input query:
     /// - If `compiler_query` is a local path inside the profile or absolute path, ports that file directly.
     /// - Otherwise searches Modrinth for the mod/modpack slug or title, downloads the `.jar` / `.mrpack`,
-    ///   and runs `horizon_port_pack::android_port::port_jar_natively` + `transpile_jar_to_horizon_mods_with_progress`.
+    ///   and runs `crate::android_port::port_jar_natively` + `transpile_jar_to_horizon_mods_with_progress`.
     pub fn run_native_so_build(&mut self, home: &Path) {
         let game = self.config.game_home(home);
-        match horizon_client::jar_transpiler::build_native_mods_payload(&game) {
+        match crate::jar_transpiler::build_native_mods_payload(&game) {
             Ok((payload, meta)) => {
                 let mod_count = meta["mods"].as_array().map(|a| a.len()).unwrap_or(0);
                 let mods_list = meta["mods"]
@@ -2518,8 +2518,8 @@ impl Catalog {
                     ),
                     format!(
                         "Target ABI: arm64-v8a • Horizon rev {} • Mixins rev {} • Hooks API 415",
-                        &horizon_client::jar_transpiler::DEFAULT_HORIZON_REV[..10],
-                        &horizon_client::jar_transpiler::DEFAULT_MIXINS_REV[..10],
+                        &crate::jar_transpiler::DEFAULT_HORIZON_REV[..10],
+                        &crate::jar_transpiler::DEFAULT_MIXINS_REV[..10],
                     ),
                     if perms_list.is_empty() {
                         "Permissions: none required (sandboxed native hooks)".into()
@@ -2589,7 +2589,7 @@ impl Catalog {
                     let out_dir = game.join("datapacks-upgraded").join(
                         path.file_stem().and_then(|s| s.to_str()).unwrap_or("datapack-26.3"),
                     );
-                    let lines = horizon_port_pack::android_port::upgrade_datapack_natively(&path, &out_dir)?;
+                    let lines = crate::android_port::upgrade_datapack_natively(&path, &out_dir)?;
                     logs.extend(lines);
                     return Ok(Reply::PortDone(
                         format!("Upgraded data pack into {}", out_dir.display()),
@@ -2598,7 +2598,7 @@ impl Catalog {
                     ));
                 } else if lower.ends_with(".mrpack") || mode == CompilerMode::Modpack {
                     let (pack, rows, count) =
-                        horizon_port_pack::android_port::port_modpack_natively(&path, &game, &report)?;
+                        crate::android_port::port_modpack_natively(&path, &game, &report)?;
                     logs.push(format!(
                         "Modpack: {} (MC {} • {} {})",
                         pack.name, pack.minecraft, pack.loader, pack.loader_version
@@ -2616,7 +2616,7 @@ impl Catalog {
                         logs,
                     ));
                 } else {
-                    let info = horizon_client::jar_transpiler::transpile_jar_to_horizon_mods_with_progress(
+                    let info = crate::jar_transpiler::transpile_jar_to_horizon_mods_with_progress(
                         &path,
                         &game,
                         &report,
@@ -2706,7 +2706,7 @@ impl Catalog {
             .or_else(|| raw_id.strip_suffix(".hmod"))
             .or_else(|| raw_id.strip_suffix(".jar"))
             .unwrap_or(raw_id);
-        let canon_id = horizon_client::jar_transpiler::sanitize_mod_id(raw_id);
+        let canon_id = crate::jar_transpiler::sanitize_mod_id(raw_id);
 
         // Check if we already have a cached check.json from horizon-port-pack or a .jar/.hnmod to inspect
         let check_path = game
@@ -2720,7 +2720,7 @@ impl Catalog {
         {
             let carry_dir = game.join("horizon-mods").join(&canon_id);
             let hmod_path = game.join("horizon-mods").join(format!("{canon_id}.hmod"));
-            let res = horizon_port_pack::android_port::AndroidPortResult {
+            let res = crate::android_port::AndroidPortResult {
                 mod_id: chk.mod_id.clone(),
                 name: chk.name.clone(),
                 version: chk.version.clone(),
@@ -2762,9 +2762,9 @@ impl Catalog {
         }
 
         // Otherwise synthesize/verify the mod bundle and populate a live AndroidPortResult
-        if let Ok(info) = horizon_client::jar_transpiler::install_builtin_horizon_mod(&canon_id, &game) {
+        if let Ok(info) = crate::jar_transpiler::install_builtin_horizon_mod(&canon_id, &game) {
             let res = info.port_pack.unwrap_or(
-                horizon_port_pack::android_port::AndroidPortResult {
+                crate::android_port::AndroidPortResult {
                     mod_id: info.id.clone(),
                     name: info.title.clone(),
                     version: info.version.clone(),
@@ -2820,7 +2820,7 @@ impl Catalog {
             )
         );
         if is_theme_field {
-            self.config.theme.preset = horizon_client::ui_theme::ThemePreset::Custom;
+            self.config.theme.preset = crate::android_ui_theme::ThemePreset::Custom;
         }
         let field = match self.editing {
             Some("name") => &mut self.config.name,
@@ -2908,11 +2908,11 @@ impl Catalog {
                         return;
                     }
                     let game_home = self.config.game_home(home);
-                    let clean = horizon_client::touch::Settings::sanitize_profile_name(
+                    let clean = crate::touch::Settings::sanitize_profile_name(
                         &self.config.custom_profile_name,
                     );
                     self.config.custom_profile_name = clean.clone();
-                    let mut touch = horizon_client::touch::Settings::load_from(
+                    let mut touch = crate::touch::Settings::load_from(
                         &game_home.join("horizon-touch.json"),
                     );
                     touch.active_profile = clean.clone();
@@ -2921,7 +2921,7 @@ impl Catalog {
                         format!("Saved controls as '{clean}' in controlmap/{clean}.json.");
                 } else if self.editing == Some("profile_desc") {
                     let game_home = self.config.game_home(home);
-                    let mut touch = horizon_client::touch::Settings::load_from(
+                    let mut touch = crate::touch::Settings::load_from(
                         &game_home.join("horizon-touch.json"),
                     );
                     let name = self.config.custom_profile_name.trim().to_owned();
@@ -2943,7 +2943,7 @@ impl Catalog {
                         } else {
                             name
                         };
-                        if let Some(existing) = horizon_client::touch::Settings::find_preset_by_name(
+                        if let Some(existing) = crate::touch::Settings::find_preset_by_name(
                             &game_home,
                             touch.control_style,
                             &final_name,
@@ -2969,10 +2969,10 @@ impl Catalog {
                 }
                 if is_theme_field {
                     self.config.theme.sanitize();
-                    horizon_client::ui_theme::set_active_theme(self.config.theme.resolve());
+                    crate::android_ui_theme::set_active_theme(self.config.theme.resolve());
                     self.status = "Custom theme color applied and saved.".into();
                 } else {
-                    horizon_client::ui_theme::set_active_theme(self.config.theme.resolve());
+                    crate::android_ui_theme::set_active_theme(self.config.theme.resolve());
                 }
                 self.editing = None;
                 let _ = self.config.save(home);
@@ -3006,7 +3006,7 @@ pub fn install_modrinth_jar_with_port_pack(
 ) -> Result<
     (
         usize,
-        Option<horizon_port_pack::android_port::AndroidPortResult>,
+        Option<crate::android_port::AndroidPortResult>,
         Vec<String>,
     ),
     String,
@@ -3033,7 +3033,7 @@ pub fn install_modrinth_jar_with_port_pack(
             0.65,
         );
         let (pack, rows, count) =
-            horizon_port_pack::android_port::port_modpack_natively(&downloaded, home, progress)?;
+            crate::android_port::port_modpack_natively(&downloaded, home, progress)?;
         let _ = std::fs::remove_file(&downloaded);
         logs.push(format!(
             "Ported Modrinth modpack '{}' ({} mods carried over from {} files).",
@@ -3088,15 +3088,15 @@ pub fn install_modrinth_jar_with_port_pack(
         ),
         0.72,
     );
-    let mut final_id = horizon_client::jar_transpiler::sanitize_mod_id(&slug);
+    let mut final_id = crate::jar_transpiler::sanitize_mod_id(&slug);
     let mut relative_final = format!("horizon-native-mods/{final_id}.hnmod");
-    let mut port_result: Option<horizon_port_pack::android_port::AndroidPortResult> = None;
+    let mut port_result: Option<crate::android_port::AndroidPortResult> = None;
     let mut verdict_str = "Ported by horizon-port-pack (.hmod + .hnmod)".to_owned();
     let mut skipped_vec = Vec::new();
     let mut namespaces_vec = vec![final_id.clone()];
 
     if let Ok(transpiled) =
-        horizon_client::jar_transpiler::transpile_jar_to_horizon_mods_with_progress(
+        crate::jar_transpiler::transpile_jar_to_horizon_mods_with_progress(
             &target,
             home,
             progress,
@@ -3237,12 +3237,12 @@ fn resolve_and_port_modrinth_deps_recursive(
         if let Ok(dep_path) =
             source.fetch(dep_file, staging, &|f| progress(&dep_dl_title, 0.55 + f * 0.10))
         {
-            let dep_slug = horizon_client::jar_transpiler::sanitize_mod_id(&dep_proj.slug);
+            let dep_slug = crate::jar_transpiler::sanitize_mod_id(&dep_proj.slug);
             let dep_target = home.join("horizon-mods").join(format!("{dep_slug}.jar"));
             let _ = std::fs::create_dir_all(home.join("horizon-mods"));
             let _ = std::fs::rename(&dep_path, &dep_target);
             if let Ok(dep_info) =
-                horizon_client::jar_transpiler::transpile_jar_to_horizon_mods(&dep_target, home)
+                crate::jar_transpiler::transpile_jar_to_horizon_mods(&dep_target, home)
             {
                 logs.push(format!(
                     "Ported required dependency (depth {depth}): {} ({})",
