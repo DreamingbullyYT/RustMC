@@ -352,18 +352,11 @@ impl Launcher {
             self.home.join("installer")
         };
         // Discover the adapter limit before packing any shared sprites.
-        let mut renderer = game::loading_renderer(
-            window.clone(),
-            false,
-            None,
-            None,
-            None,
-            if self.catalog.config.renderer == crate::catalog::RendererMode::OpenGl {
-                horizon_client::graphics::GraphicsApi::OpenGl
-            } else {
-                horizon_client::graphics::GraphicsApi::Auto
-            },
-        )?;
+        let api = if self.catalog.config.renderer == crate::catalog::RendererMode::OpenGl {
+            horizon_client::graphics::GraphicsApi::OpenGl
+        } else {
+            horizon_client::graphics::GraphicsApi::Auto
+        };
         let gui = game::UiResources {
             atlas: HudAtlas::build(&atlas_root)?,
             panorama: Arc::new(horizon_client::gfx::panorama::Faces {
@@ -374,7 +367,16 @@ impl Launcher {
                 &atlas_root,
             )),
         };
-        renderer.set_loading_ui(&gui.atlas, gui.panorama.as_ref())?;
+        // Build the first renderer with the Android atlas already installed.
+        // This avoids a fork-only Renderer::set_loading_ui method.
+        let mut renderer = game::loading_renderer(
+            window.clone(),
+            false,
+            Some(&gui.atlas),
+            Some(gui.panorama.as_ref()),
+            None,
+            api,
+        )?;
         let uncapped = self.catalog.config.max_fps_mode && !self.catalog.config.battery_perf_mode;
         renderer.set_present_mode(
             !uncapped,
