@@ -33,4 +33,12 @@ if [ -d "$PATCH_DIR" ]; then
     git -C "$DEST" apply "$patch"
   done
 fi
+if [ -d "$PATCH_DIR" ]; then
+  find "$PATCH_DIR" -maxdepth 1 -type f -name '*.py' -print | sort |
+  while IFS= read -r patcher; do
+    echo "Applying Android integration patcher: $(basename "$patcher")"
+    python3 "$patcher" "$DEST"
+  done
+fi
+
 echo "Pinned upstream ready at $DEST ($COMMIT)"
