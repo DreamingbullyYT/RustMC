@@ -55,6 +55,9 @@ jobs:
         run: ./scripts/checkout-upstream.sh "$RUNNER_TEMP/horizon"
       - name: Overlay original Android application
         run: ./scripts/prepare-android-build.sh "$RUNNER_TEMP/horizon"
+      - name: Verify Android clipboard dependency override
+        run: cargo tree -p horizon-android --target aarch64-linux-android -i arboard
+        working-directory: ${{ runner.temp }}/horizon
       - name: Compile Android native target
         run: |
           python3 "$RUNNER_TEMP/horizon/tools/android_build.py" \

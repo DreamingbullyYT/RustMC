@@ -1,6 +1,6 @@
 [package]
 name = "arboard"
-version = "3.6.1"
+version = "3.7.0"
 edition = "2024"
 license = "MIT"
 description = "Android clipboard adapter for Horizon's upstream input crate"
