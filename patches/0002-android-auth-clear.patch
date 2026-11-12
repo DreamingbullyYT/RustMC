@@ -1,27 +1,33 @@
 diff --git a/crates/horizon-client-render/src/auth.rs b/crates/horizon-client-render/src/auth.rs
 --- a/crates/horizon-client-render/src/auth.rs
 +++ b/crates/horizon-client-render/src/auth.rs
-@@ -6,5 +6,5 @@
- use std::{
-     path::Path,
--    sync::{Arc, Mutex, OnceLock},
-+    sync::{Arc, Mutex},
-     time::{Duration, SystemTime},
- };
-@@ -126,9 +126,14 @@
+@@ -126,9 +126,27 @@
  static CURRENT: OnceLock<Arc<AuthSession>> = OnceLock::new();
++#[cfg(target_os = "android")]
++static ANDROID_CURRENT: std::sync::RwLock<Option<Arc<AuthSession>>> = std::sync::RwLock::new(None);
  
  /// The account this game was started with (set once at start).
  pub fn set_current(session: AuthSession) {
--    let _ = CURRENT.set(Arc::new(session));
-+    *CURRENT.lock().unwrap() = Some(Arc::new(session));
++    #[cfg(not(target_os = "android"))]
+     let _ = CURRENT.set(Arc::new(session));
++    #[cfg(target_os = "android")]
++    {
++        *ANDROID_CURRENT.write().unwrap() = Some(Arc::new(session));
++    }
  }
  pub fn current() -> Option<Arc<AuthSession>> {
--    CURRENT.get().cloned()
-+    CURRENT.lock().unwrap().clone()
++    #[cfg(not(target_os = "android"))]
++    {
++        CURRENT.get().cloned()
++    }
++    #[cfg(target_os = "android")]
++    {
++        ANDROID_CURRENT.read().unwrap().clone()
++    }
 +}
 +
 +/// Clear the in-process account when the Android launcher signs out or switches accounts.
++#[cfg(target_os = "android")]
 +pub fn clear_current() {
-+    *CURRENT.lock().unwrap() = None;
++    *ANDROID_CURRENT.write().unwrap() = None;
  }
