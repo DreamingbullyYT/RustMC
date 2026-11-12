@@ -1,16 +1,10 @@
-# Android modules
+# Android port
 
-Android-specific implementation belongs here, outside the Horizon engine.
+The Android work is split from the pinned Horizon engine.
 
-Planned ownership:
+- `PORTING-AUDIT.md` records source provenance and the porting rules.
+- `app/` contains the Compose launcher, a separate NativeActivity game host, and Android packaging.
+- The Rust Android runtime/JNI bridge is not ported yet; see `app/README.md`.
 
-- `app/`: Android Gradle application and system-facing bridge.
-- `native/`: Rust `cdylib` entry point and JNI boundary.
-- `modules/input/`: touch and physical input adapters.
-- `modules/lifecycle/`: Android activity and surface lifecycle.
-- `modules/storage/`: Storage Access Framework and data-directory adapter.
-- `modules/graphics/`: Android renderer/surface configuration.
-- `modules/mods/`: compatibility discovery for supported Horizon mod APIs.
-
-Only create a module when its interface and tests are understood. This directory
-is intentionally not populated with copied code from another fork.
+The engine baseline remains `horizon-rust/horizon@69ba5a7b63642555fdd3461defcb53c265967d59`.
+Do not change the `upstream/horizon` gitlink to develop Android features.
