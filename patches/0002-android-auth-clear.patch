@@ -1,0 +1,24 @@
+diff --git a/crates/horizon-client-render/src/auth.rs b/crates/horizon-client-render/src/auth.rs
+index 0000000..0000000 100644
+--- a/crates/horizon-client-render/src/auth.rs
++++ b/crates/horizon-client-render/src/auth.rs
+@@
+-    sync::{Arc, Mutex, OnceLock},
++    sync::{Arc, Mutex},
+@@
+-static CURRENT: OnceLock<Arc<AuthSession>> = OnceLock::new();
++static CURRENT: Mutex<Option<Arc<AuthSession>>> = Mutex::new(None);
+@@
+ pub fn set_current(session: AuthSession) {
+-    let _ = CURRENT.set(Arc::new(session));
++    *CURRENT.lock().unwrap() = Some(Arc::new(session));
+ }
+ pub fn current() -> Option<Arc<AuthSession>> {
+-    CURRENT.get().cloned()
++    CURRENT.lock().unwrap().clone()
++}
++
++/// Clear the in-process account when the Android launcher signs out or switches accounts.
++pub fn clear_current() {
++    *CURRENT.lock().unwrap() = None;
+ }
