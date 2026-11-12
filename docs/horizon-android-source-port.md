@@ -147,3 +147,55 @@ it does not yet contain the original Android renderer, native Android
 entrypoint, compatibility adapters, or a working Android APK. The previous
 Compose shell on `android-minimal-port` is an unrelated intermediate and is
 not the port target.
+
+## Event-loop boundary traced to implementation
+
+The upstream game startup path has now been traced one level deeper:
+
+- `game::run_with()` performs the full resource and world startup, then calls
+  `loading_screen::run_event_loop(game)` after the `Game` has been created.
+- `loading_screen::run_event_loop()` handles headless mode itself. For a
+  windowed game it creates `EventLoop::new()` locally and immediately calls
+  `run_app(&mut split)`.
+- `Loading` and `Game` implement winit 0.30's `ApplicationHandler` and
+  create their windows from `resumed(&ActiveEventLoop)`. The event loop is
+  therefore the correct narrow injection boundary; the renderer does not
+  need to be replaced to support Android's `AndroidApp`.
+- The gameplay crate is a library as well as a binary (`src/lib.rs` exports
+  `pub mod entry` and `pub mod game`). However, `entry::main_with()` also
+  owns one-time hook registration, allocator setup, logging/crash setup and
+  shutdown. Calling `game::run_with()` directly from an Android cdylib would
+  skip required initialization and is not an acceptable integration.
+
+### Required minimal upstream seam (not yet applied)
+
+The clean seam is a paired entry/startup API, not a renderer rewrite:
+
+1. Preserve `entry::main()` and `entry::main_with()` as the desktop defaults.
+2. Factor the common initialization in `entry.rs` so a platform entry can
+   execute the same hook/logging/allocator setup and then call the game with
+   a supplied event loop, without duplicating initialization or calling
+   `process::exit` from Android's lifecycle callback.
+3. Add a `game::run_with_event_loop(EventLoop<()>)` path which shares the
+   existing `run_with` resource/game startup and passes the supplied loop
+   down to `loading_screen::run_event_loop`; keep the existing
+   `run_with()` path creating `EventLoop::new()` exactly as before.
+4. In the Android cdylib, construct the event loop with winit's Android
+   extension and the `AndroidApp` supplied by NativeActivity, then call the
+   Android entry API. Keep Android-specific glue outside `game.rs` wherever
+   the existing module boundary allows.
+
+This seam needs coordinated edits in `entry.rs`, `game.rs`, and
+`game/loading_screen.rs`. It must be tested against desktop builds and the
+Android target before being considered complete. No upstream source patch
+has been applied yet; this section records the verified design so a patch
+does not accidentally bypass engine initialization or alter desktop startup.
+
+### Renderer preservation check
+
+The original Android launcher renderer is still the target. Its fork-only
+runtime services (Android document access, installer/catalog, touch and
+device integration) must be supplied by the Android platform crate or
+narrow adapters. Do not port the fork's entire `horizon-client` package over
+the pinned upstream package, and do not replace the wgpu launcher with a new
+UI.
