@@ -130,16 +130,16 @@ mod backend {
 
 use std::cell::RefCell;
 pub(crate) fn keyboard_mouse_input() -> bool {
-    horizon_client::android_runtime::active_input() == catalog::InputHost::KeyboardMouse
+    crate::android_runtime::active_input() == catalog::InputHost::KeyboardMouse
 }
 pub(crate) fn configure_input_mode(mode: catalog::InputHost) {
-    horizon_client::android_runtime::configure_input(mode);
+    crate::android_runtime::configure_input(mode);
 }
 pub(crate) fn touch_visible() -> bool {
-    horizon_client::android_runtime::active_input() == catalog::InputHost::Touch
+    crate::android_runtime::active_input() == catalog::InputHost::Touch
 }
 pub(crate) fn touch_input(touch: bool) {
-    horizon_client::android_runtime::note_input(if touch {
+    crate::android_runtime::note_input(if touch {
         catalog::InputHost::Touch
     } else {
         catalog::InputHost::KeyboardMouse
@@ -149,7 +149,7 @@ pub(crate) fn save_input_mode() {
     APP.with(|app| {
         if let Some(home) = app.borrow().as_ref().and_then(|a| a.internal_data_path()) {
             let mut config = catalog::Config::load(&home);
-            let mode = horizon_client::android_runtime::input_mode();
+            let mode = crate::android_runtime::input_mode();
             if config.input_host != mode {
                 config.input_host = mode;
                 if let Err(e) = config.save(&home) {
@@ -280,10 +280,10 @@ fn android_main(app: AndroidApp) {
         log::error!("Android supplied no application cache directory");
         return;
     };
-    horizon_client::android_runtime::configure_cache_dir(cache.clone());
+    crate::android_runtime::configure_cache_dir(cache.clone());
     horizon_client::official_install::configure_download_cache_dir(cache);
-    horizon_client::android_runtime::install_clipboard(
-        horizon_client::android_runtime::ClipboardHooks {
+    crate::android_runtime::install_clipboard(
+        crate::android_runtime::ClipboardHooks {
             get: platform::clipboard_get,
             set: platform::clipboard_set,
         },
