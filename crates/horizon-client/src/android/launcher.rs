@@ -141,8 +141,8 @@ impl Launcher {
                 catalog.status = trimmed.to_owned();
             }
         }
-        horizon_client::android_runtime::graphics_startup::configure(home.clone());
-        if horizon_client::android_runtime::graphics_startup::recover(&home) {
+        crate::android_runtime::graphics_startup::configure(home.clone());
+        if crate::android_runtime::graphics_startup::recover(&home) {
             catalog.config.renderer = crate::catalog::RendererMode::VulkanCompatibility;
             if let Err(error) = catalog.config.save(&home) {
                 log::warn!("Could not save graphics recovery choice: {error}");
@@ -259,7 +259,7 @@ impl Launcher {
     }
 
     fn restore_launcher(&mut self, events: &ActiveEventLoop) {
-        if !horizon_client::android_runtime::take_launcher_return() {
+        if !crate::android_runtime::take_launcher_return() {
             return;
         }
         if let Some(mut game) = self.game.take() {
@@ -288,10 +288,10 @@ impl Launcher {
             self.fail(error);
             return;
         }
-        horizon_client::android_runtime::clear_gamepads();
+        crate::android_runtime::clear_gamepads();
         self.controller_edges = Default::default();
         self.controller_repeat = None;
-        self.catalog.config.input_host = horizon_client::android_runtime::input_mode();
+        self.catalog.config.input_host = crate::android_runtime::input_mode();
         self.catalog.refresh(&self.home);
         self.login.refresh_status();
         crate::diagnostics::heartbeat("returned_to_launcher", || serde_json::json!({}));
@@ -328,7 +328,7 @@ impl Launcher {
         horizon_client::ui_theme::set_android_dpi(crate::platform::display_density());
         horizon_client::ui_theme::set_ui_scale_percent(self.catalog.config.ui_scale_percent);
         crate::display::set_scale(self.catalog.config.render_scale);
-        horizon_client::android_runtime::configure_gpu(false);
+        crate::android_runtime::configure_gpu(false);
         if let (Some(renderer), Some(window)) = (&mut self.renderer, &self.window) {
             if let Some(size) = crate::display::prepare(window)? {
                 renderer.resize(size[0], size[1]);
@@ -465,8 +465,8 @@ impl Launcher {
             "play_requested",
             || serde_json::json!({"renderer":self.catalog.config.renderer.label(),"resolution_percent":self.catalog.config.render_scale.percent()}),
         );
-        horizon_client::android_runtime::configure_worker_limit(self.catalog.config.worker_limit);
-        horizon_client::android_runtime::configure_cache_budget(
+        crate::android_runtime::configure_worker_limit(self.catalog.config.worker_limit);
+        crate::android_runtime::configure_cache_budget(
             self.catalog.config.cache_budget_mib,
         );
         crate::configure_input_mode(self.catalog.config.input_host);
@@ -611,7 +611,7 @@ impl Launcher {
                 )?;
             }
             // The A press that launches the game must not accept its first menu too.
-            horizon_client::android_runtime::clear_gamepads();
+            crate::android_runtime::clear_gamepads();
             self.controller_edges = Default::default();
             self.controller_repeat = None;
             let request = crate::game_launch::LaunchRequest {
@@ -748,7 +748,7 @@ impl ApplicationHandler for Launcher {
             WindowEvent::Touch(touch) => self.touch_event(events, touch),
             WindowEvent::Focused(false) => {
                 crate::diagnostics::heartbeat("launcher_background", || serde_json::json!({}));
-                horizon_client::android_runtime::clear_gamepads();
+                crate::android_runtime::clear_gamepads();
                 self.controller_repeat = None;
                 self.mouse_down = false;
                 self.drag = None;
@@ -825,7 +825,7 @@ impl ApplicationHandler for Launcher {
         if let Some(game) = &mut self.game {
             game.device_event(events, id, event);
         } else {
-            horizon_client::android_runtime::gamepad_event(
+            crate::android_runtime::gamepad_event(
                 winit::platform::android::native_device_id(id),
                 &event,
             );
@@ -1037,7 +1037,7 @@ impl Launcher {
     fn controller_frame(&mut self, events: &ActiveEventLoop) -> Result<()> {
         use horizon_client::gamepad::Button;
         use winit::keyboard::{Key, NamedKey};
-        let mut state = horizon_client::android_runtime::gamepad_state();
+        let mut state = crate::android_runtime::gamepad_state();
         for (b, held) in [
             (Button::DPadLeft, state.left[0] < -0.55),
             (Button::DPadRight, state.left[0] > 0.55),
