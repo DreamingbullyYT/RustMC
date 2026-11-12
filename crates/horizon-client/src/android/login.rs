@@ -1,28 +1,28 @@
 //! Native account panel; authentication is shared with the desktop launcher.
 use super::pages::{Action, button};
 use crate::account::{self, Account, Accounts, Secrets, SignIn, SignInState};
-use horizon_client::ui_theme::{Face, Icon, Ui, color};
+use crate::android_ui_theme::{Face, Icon, Ui, color};
 
 fn login_surface() -> u32 {
-    horizon_client::ui_theme::active_theme().surface
+    crate::android_ui_theme::active_theme().surface
 }
 fn login_surface_high() -> u32 {
-    horizon_client::ui_theme::active_theme().surface_bright
+    crate::android_ui_theme::active_theme().surface_bright
 }
 fn login_border() -> u32 {
-    horizon_client::ui_theme::active_theme().border
+    crate::android_ui_theme::active_theme().border
 }
 fn login_text() -> u32 {
-    horizon_client::ui_theme::active_theme().text_primary
+    crate::android_ui_theme::active_theme().text_primary
 }
 fn login_muted() -> u32 {
-    horizon_client::ui_theme::active_theme().text_muted
+    crate::android_ui_theme::active_theme().text_muted
 }
 fn login_accent() -> u32 {
-    horizon_client::ui_theme::active_theme().accent
+    crate::android_ui_theme::active_theme().accent
 }
 fn login_accent_soft() -> u32 {
-    horizon_client::ui_theme::active_theme().accent_soft
+    crate::android_ui_theme::active_theme().accent_soft
 }
 
 pub(super) struct Login {
@@ -338,7 +338,7 @@ impl Login {
                 y = y.min((ime_top_dp - h - 8.0).max(6.0));
             }
         }
-        let theme = horizon_client::ui_theme::active_theme();
+        let theme = crate::android_ui_theme::active_theme();
         ui.fill(
             0.0,
             0.0,
