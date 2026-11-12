@@ -21,6 +21,7 @@ import lab
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+KNOWN_VERSION_JSON_SHA1 = {'26.3': '11f1aefe473eefba0af62e3286c33b692807b2eb'}
 RUNTIMES = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"
 
 
@@ -63,7 +64,13 @@ def download_game(version, directory):
     # and client/server jar hashes are checked against the engine pins below.
     versions = directory / 'versions' / version
     manifest_path = versions / f'{version}.json'
-    lab.download(entry['url'], manifest_path, entry['sha1'])
+    # horizon-prepare only accepts the 26.3 version file with this exact SHA-1. Mojang republished
+    # the file, so the catalog (entry['url']) now points at a different one: fetch the pinned copy.
+    pinned = KNOWN_VERSION_JSON_SHA1.get(version)
+    if pinned:
+        lab.download(f'https://piston-meta.mojang.com/v1/packages/{pinned}/{version}.json', manifest_path, pinned)
+    else:
+        lab.download(entry['url'], manifest_path, entry['sha1'])
     manifest = json.loads(manifest_path.read_text())
     files = []
     for side in ['client', 'server']:
