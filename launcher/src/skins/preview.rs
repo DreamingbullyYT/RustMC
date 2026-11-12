@@ -230,7 +230,7 @@ pub fn render(
         depth: vec![f32::INFINITY; (width * height) as usize],
         camera,
     };
-    let normalized = horizon_core::player_texture::process_legacy_skin(
+    let normalized = super::player_texture::process_legacy_skin(
         skin.width(),
         skin.height(),
         skin.as_raw(),
@@ -239,7 +239,7 @@ pub fn render(
     let skin = normalized.as_ref().unwrap_or(skin);
     let cape_image = cape
         .and_then(|image| {
-            horizon_core::player_texture::process_cape(
+            super::player_texture::process_cape(
                 image.width(),
                 image.height(),
                 image.as_raw(),
