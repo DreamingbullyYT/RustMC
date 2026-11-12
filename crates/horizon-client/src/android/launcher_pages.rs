@@ -2,8 +2,8 @@ use super::*;
 use crate::catalog::SettingsCategory;
 use horizon_client::{
     gfx::Renderer,
-    osk::Output,
 };
+use crate::android_osk::Output;
 use crate::android_ui_theme::{Icon, color};
 use std::sync::atomic::Ordering;
 use winit::{
