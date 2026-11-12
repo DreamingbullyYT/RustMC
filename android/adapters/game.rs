@@ -63,6 +63,11 @@ pub fn loading_renderer(
         None,
         previous,
         api,
+        false,
+        false,
+        &horizon_client::graphics::Graphics::default(),
+        horizon_client::gfx::FrameRequest::default(),
+        horizon_client::gfx::DisplayReading::default(),
     ))?;
     if let Some(atlas) = atlas {
         renderer.hud.sprite_animations = atlas
