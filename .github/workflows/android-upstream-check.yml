@@ -41,6 +41,8 @@ jobs:
           java-version: '17'
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Install pinned Android NDK and build tools
         run: |
           yes | sdkmanager --licenses
