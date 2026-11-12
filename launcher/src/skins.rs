@@ -13,6 +13,8 @@ pub mod cloud;
 pub mod library;
 #[path = "skins/preview.rs"]
 pub mod preview;
+#[path = "skins/player_texture.rs"]
+pub mod player_texture;
 
 pub const SKIN_ENV: &str = "HORIZON_OFFLINE_SKIN";
 pub const MODEL_ENV: &str = "HORIZON_OFFLINE_SKIN_MODEL";
