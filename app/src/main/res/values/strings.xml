@@ -14,4 +14,7 @@
     <string name="no_instances">No instances yet</string>
     <string name="overlaps">Overlapping buttons: %1$d</string>
     <string name="game_missing">The Horizon engine app is not installed</string>
+    <string name="tab_worlds">Worlds</string>
+    <string name="tab_servers">Servers</string>
+    <string name="add">Add</string>
 </resources>

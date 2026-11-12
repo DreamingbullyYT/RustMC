@@ -48,11 +48,11 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun App() {
         var tab by remember { mutableIntStateOf(0) }
-        val titles = listOf(R.string.tab_play, R.string.tab_controls, R.string.tab_mods, R.string.tab_logs)
+        val titles = listOf(R.string.tab_play, R.string.tab_worlds, R.string.tab_servers, R.string.tab_mods, R.string.tab_controls, R.string.tab_logs)
         Column(Modifier.fillMaxSize().systemBarsPadding()) {
-            TabRow(selectedTabIndex = tab) { titles.forEachIndexed { n, t -> Tab(selected = tab == n, onClick = { tab = n }, text = { Text(stringResource(t)) }) } }
+            ScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) { titles.forEachIndexed { n, t -> Tab(selected = tab == n, onClick = { tab = n }, text = { Text(stringResource(t)) }) } }
             Box(Modifier.weight(1f).padding(16.dp)) {
-                when (tab) { 0 -> PlayTab(); 1 -> ControlsTab(); 2 -> ModsTab(); else -> LogsTab() }
+                when (tab) { 0 -> PlayTab(); 1 -> WorldsTab(); 2 -> ServersTab(); 3 -> ModsTab(); 4 -> ControlsTab(); else -> LogsTab() }
             }
         }
     }
@@ -78,6 +78,63 @@ class MainActivity : ComponentActivity() {
                                     thread { val n = Backup.create(store.gameDir(i), File(getExternalFilesDir(null), "${i.id}-backup.zip")); runOnUiThread { message = "Backup: $n files" } }
                                 }) { Text(stringResource(R.string.backup)) }
                                 TextButton(onClick = { store.delete(i); items = store.list() }) { Text(stringResource(R.string.delete)) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun WorldsTab() {
+        val inst = store.list().firstOrNull()
+        if (inst == null) { Text(stringResource(R.string.no_instances)); return }
+        val wm = remember(inst.id) { WorldManager(store.gameDir(inst)) }
+        var worlds by remember { mutableStateOf(wm.list()) }
+        var message by remember { mutableStateOf<String?>(null) }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(inst.name, style = MaterialTheme.typography.titleSmall)
+            message?.let { Text(it) }
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(worlds, key = { it.folder }) { w ->
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(w.displayName, style = MaterialTheme.typography.titleMedium)
+                            Text("${w.version ?: "?"} · ${w.sizeBytes / 1_000_000} MB", style = MaterialTheme.typography.bodySmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { thread { val n = wm.backup(w.folder, File(getExternalFilesDir(null), "${w.folder}-world.zip")); runOnUiThread { message = "Backup: $n files" } } }) { Text(stringResource(R.string.backup)) }
+                                TextButton(onClick = { wm.delete(w.folder); worlds = wm.list() }) { Text(stringResource(R.string.delete)) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ServersTab() {
+        val inst = store.list().firstOrNull()
+        if (inst == null) { Text(stringResource(R.string.no_instances)); return }
+        val list = remember(inst.id) { ServerList(File(store.gameDir(inst), "ferrite-servers.json")) }
+        var servers by remember { mutableStateOf(list.all()) }
+        var host by remember { mutableStateOf("") }
+        var status by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = host, onValueChange = { host = it }, modifier = Modifier.weight(1f), singleLine = true)
+                Button(onClick = { runCatching { list.add(Server(host.trim(), host.trim())) }; servers = list.all(); host = "" }) { Text(stringResource(R.string.add)) }
+            }
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(servers, key = { it.name }) { s ->
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text("${s.name}:${s.port}", style = MaterialTheme.typography.titleSmall)
+                            status[s.name]?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { thread { val r = runCatching { Ping.query(s.host, s.port).let { "${it.motd} · ${it.online}/${it.max} · ${it.pingMs} ms" } }.getOrElse { "offline" }; runOnUiThread { status = status + (s.name to r) } } }) { Text("Ping") }
+                                TextButton(onClick = { list.remove(s.name); servers = list.all() }) { Text(stringResource(R.string.delete)) }
                             }
                         }
                     }

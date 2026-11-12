@@ -14,4 +14,7 @@
     <string name="no_instances">Nu ai nicio instanță încă</string>
     <string name="overlaps">Butoane suprapuse: %1$d</string>
     <string name="game_missing">Aplicația engine Horizon nu este instalată</string>
+    <string name="tab_worlds">Lumi</string>
+    <string name="tab_servers">Servere</string>
+    <string name="add">Adaugă</string>
 </resources>

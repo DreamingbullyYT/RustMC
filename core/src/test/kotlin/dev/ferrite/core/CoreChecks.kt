@@ -3,9 +3,9 @@ package dev.ferrite.core
 import java.io.File
 import java.nio.file.Files
 
-private var failed = 0
-private fun check(name: String, cond: Boolean) { if (!cond) { failed++; println("FAIL $name") } else println("ok   $name") }
-private fun throws(block: () -> Unit) = runCatching(block).isFailure
+internal var failed = 0
+internal fun check(name: String, cond: Boolean) { if (!cond) { failed++; println("FAIL $name") } else println("ok   $name") }
+internal fun throws(block: () -> Unit) = runCatching(block).isFailure
 
 fun main() {
     // Json
@@ -67,5 +67,6 @@ fun main() {
     check("modrinth failure is empty", Modrinth.search({ error("offline") }, "x").isEmpty())
 
     root.deleteRecursively()
+    moreChecks()
     if (failed > 0) { println("$failed failed"); kotlin.system.exitProcess(1) } else println("all passed")
 }
