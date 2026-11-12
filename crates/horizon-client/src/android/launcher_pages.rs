@@ -3,8 +3,8 @@ use crate::catalog::SettingsCategory;
 use horizon_client::{
     gfx::Renderer,
     osk::Output,
-    ui_theme::{Icon, color},
 };
+use crate::android_ui_theme::{Icon, color};
 use std::sync::atomic::Ordering;
 use winit::{
     event::{KeyEvent, Touch},
@@ -16,66 +16,66 @@ thread_local! {
     static SLIDER_TRACK_TARGETS: std::cell::RefCell<Vec<([f32; 4], Action, f32, f32)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Centralized dynamic theme accessors backed by `horizon_client::ui_theme::active_theme()`.
+/// Centralized dynamic theme accessors backed by `crate::android_ui_theme::active_theme()`.
 #[inline]
 fn my3_bg() -> u32 {
-    horizon_client::ui_theme::active_theme().bg_solid
+    crate::android_ui_theme::active_theme().bg_solid
 }
 #[inline]
 fn my3_surface() -> u32 {
-    horizon_client::ui_theme::active_theme().surface
+    crate::android_ui_theme::active_theme().surface
 }
 #[inline]
 fn my3_card_bg() -> u32 {
-    horizon_client::ui_theme::active_theme().surface_dim
+    crate::android_ui_theme::active_theme().surface_dim
 }
 #[inline]
 fn my3_card_border() -> u32 {
-    color::with_alpha(horizon_client::ui_theme::active_theme().border, 0.42)
+    color::with_alpha(crate::android_ui_theme::active_theme().border, 0.42)
 }
 #[inline]
 fn my3_surface_high() -> u32 {
-    horizon_client::ui_theme::active_theme().surface_bright
+    crate::android_ui_theme::active_theme().surface_bright
 }
 #[inline]
 fn my3_border() -> u32 {
-    color::with_alpha(horizon_client::ui_theme::active_theme().border, 0.52)
+    color::with_alpha(crate::android_ui_theme::active_theme().border, 0.52)
 }
 #[inline]
 fn my3_nav_active() -> u32 {
-    horizon_client::ui_theme::active_theme().surface_selected
+    crate::android_ui_theme::active_theme().surface_selected
 }
 #[inline]
 fn my3_accent() -> u32 {
-    horizon_client::ui_theme::active_theme().accent
+    crate::android_ui_theme::active_theme().accent
 }
 #[inline]
 fn my3_accent_soft() -> u32 {
-    horizon_client::ui_theme::active_theme().accent_soft
+    crate::android_ui_theme::active_theme().accent_soft
 }
 #[inline]
 fn my3_on_accent() -> u32 {
-    horizon_client::ui_theme::active_theme().on_accent
+    crate::android_ui_theme::active_theme().on_accent
 }
 #[inline]
 fn my3_track() -> u32 {
-    horizon_client::ui_theme::active_theme().surface_dim
+    crate::android_ui_theme::active_theme().surface_dim
 }
 #[inline]
 fn my3_pause_bg() -> u32 {
-    horizon_client::ui_theme::active_theme().surface_bright
+    crate::android_ui_theme::active_theme().surface_bright
 }
 #[inline]
 fn my3_cancel_bg() -> u32 {
-    color::with_alpha(horizon_client::ui_theme::active_theme().danger, 0.28)
+    color::with_alpha(crate::android_ui_theme::active_theme().danger, 0.28)
 }
 #[inline]
 fn my3_text() -> u32 {
-    horizon_client::ui_theme::active_theme().text_primary
+    crate::android_ui_theme::active_theme().text_primary
 }
 #[inline]
 fn my3_muted() -> u32 {
-    horizon_client::ui_theme::active_theme().text_muted
+    crate::android_ui_theme::active_theme().text_muted
 }
 
 /// Smooth 60fps UI animation state across navigation, pages, accordions, theme previews, progress bars, and modals.
@@ -149,7 +149,7 @@ impl AnimState {
         self.last_tick = now;
         self.target_nav_y = target_nav_y;
 
-        if horizon_client::ui_theme::motion::reduced_motion() {
+        if crate::android_ui_theme::motion::reduced_motion() {
             self.intro_done = true;
             self.last_page = page;
             self.last_category = category;
@@ -189,7 +189,7 @@ impl AnimState {
         };
 
         let speed = (dt * 14.0).min(1.0);
-        horizon_client::ui_theme::motion::step_spring_damper(
+        crate::android_ui_theme::motion::step_spring_damper(
             &mut self.nav_pill_y,
             &mut self.nav_pill_vel,
             target_nav_y,
@@ -212,7 +212,7 @@ impl AnimState {
     }
 
     pub fn trigger_page_transition(&mut self) {
-        if !horizon_client::ui_theme::motion::reduced_motion() {
+        if !crate::android_ui_theme::motion::reduced_motion() {
             self.last_tick = std::time::Instant::now();
             self.page_fade = 0.0;
             self.page_slide = 18.0;
@@ -220,14 +220,14 @@ impl AnimState {
     }
 
     pub fn trigger_theme_pulse(&mut self) {
-        if !horizon_client::ui_theme::motion::reduced_motion() {
+        if !crate::android_ui_theme::motion::reduced_motion() {
             self.last_tick = std::time::Instant::now();
             self.theme_pulse = 0.0;
         }
     }
 
     pub fn step_switch(&mut self, key: &str, on: bool, dt: f32) -> f32 {
-        if horizon_client::ui_theme::motion::reduced_motion() {
+        if crate::android_ui_theme::motion::reduced_motion() {
             return if on { 1.0 } else { 0.0 };
         }
         let target = if on { 1.0 } else { 0.0 };
@@ -245,7 +245,7 @@ impl AnimState {
         if !self.intro_done {
             return true;
         }
-        if horizon_client::ui_theme::motion::reduced_motion() {
+        if crate::android_ui_theme::motion::reduced_motion() {
             return false;
         }
         self.page_fade < 0.99
@@ -409,10 +409,10 @@ pub(super) enum Action {
     ToggleAutoJump,
     ToggleInventoryControls,
     // Theme customization actions (Settings -> Launcher Settings -> Theme)
-    SelectThemePreset(horizon_client::ui_theme::ThemePreset),
-    SetThemeAppearance(horizon_client::ui_theme::ThemeAppearance),
-    SetThemeBackgroundMode(horizon_client::ui_theme::BackgroundMode),
-    SetGradientDirection(horizon_client::ui_theme::GradientDirection),
+    SelectThemePreset(crate::android_ui_theme::ThemePreset),
+    SetThemeAppearance(crate::android_ui_theme::ThemeAppearance),
+    SetThemeBackgroundMode(crate::android_ui_theme::BackgroundMode),
+    SetGradientDirection(crate::android_ui_theme::GradientDirection),
     ToggleGradientThreeStops,
     StepGradientMidPos(i8),
     SelectAccentSwatch(u32),
@@ -1126,7 +1126,7 @@ fn draw_my3_progress_view(
         cancel_rect[2],
         cancel_rect[3],
         8.0,
-        horizon_client::ui_theme::active_theme().danger,
+        crate::android_ui_theme::active_theme().danger,
     );
     ui.icon(
         Icon::Close,
@@ -1251,7 +1251,7 @@ impl Launcher {
                 let _ = std::env::set_current_dir(prev);
             }
             if !r.render(&game::loading_frame(&b))? && !b.patches.is_empty() {
-                horizon_client::ui_theme::reset_atlas();
+                crate::android_ui_theme::reset_atlas();
             }
             return Ok(());
         }
@@ -1267,7 +1267,7 @@ impl Launcher {
             None
         };
         let (w, h) = (ui.w, ui.h);
-        let active_th = horizon_client::ui_theme::active_theme();
+        let active_th = crate::android_ui_theme::active_theme();
         ui.draw_theme_background(0.0, 0.0, w, h, &active_th);
 
         // ---- Top Header Bar (brand lockup ... account pill) ----
@@ -1385,7 +1385,7 @@ impl Launcher {
         let vel_stretch = (self.anim.nav_pill_vel.abs() * 0.012).clamp(0.0, 4.5);
         let pill_draw_y = self.anim.nav_pill_y - vel_stretch * 0.5;
         let pill_draw_h = nav_h + vel_stretch;
-        let pill_rad = horizon_client::ui_theme::motion::morph_radius(
+        let pill_rad = crate::android_ui_theme::motion::morph_radius(
             pill_draw_h * 0.5,
             pill_draw_h * 0.42,
             pill_draw_h * 0.36,
@@ -2630,12 +2630,12 @@ impl Launcher {
                     && point[1] >= rect[1]
                     && point[1] <= rect[1] + rect[3]
             }) {
-                let sc = horizon_client::ui_theme::motion::press_scale(true, 0.0);
+                let sc = crate::android_ui_theme::motion::press_scale(true, 0.0);
                 let sw = *w * sc;
                 let sh = *h * sc;
                 let sx = *x + (*w - sw) * 0.5;
                 let sy = *y + (*h - sh) * 0.5;
-                let rad = horizon_client::ui_theme::motion::morph_radius(
+                let rad = crate::android_ui_theme::motion::morph_radius(
                     (*h * 0.22).clamp(6.0, 10.0),
                     6.0,
                     4.5,
@@ -2660,9 +2660,9 @@ impl Launcher {
             && let Some(([x, y, w, h], _)) = self.targets.iter().find(|(_, a)| *a == action)
         {
             let p = (time.elapsed().as_secs_f32() / 0.26).clamp(0.0, 1.0);
-            let spring = horizon_client::ui_theme::motion::spring_expressive_spatial(p);
-            let fade = (1.0 - horizon_client::ui_theme::motion::spring_expressive_effects(p)).clamp(0.0, 1.0);
-            let rad = horizon_client::ui_theme::motion::morph_radius(
+            let spring = crate::android_ui_theme::motion::spring_expressive_spatial(p);
+            let fade = (1.0 - crate::android_ui_theme::motion::spring_expressive_effects(p)).clamp(0.0, 1.0);
+            let rad = crate::android_ui_theme::motion::morph_radius(
                 (*h * 0.22).clamp(6.0, 10.0),
                 7.0,
                 5.0,
@@ -2718,7 +2718,7 @@ impl Launcher {
         if !r.render(&game::loading_frame(&b))? && !b.patches.is_empty() {
             // A suspended/lost surface skips the frame, including its glyph
             // uploads. Rebuild them next time instead of caching invisible text.
-            horizon_client::ui_theme::reset_atlas();
+            crate::android_ui_theme::reset_atlas();
         }
         Ok(())
     }
@@ -5375,7 +5375,7 @@ impl Launcher {
                 ui.set_clip(None);
             }
             SettingsCategory::Theme => {
-                use horizon_client::ui_theme::{
+                use crate::android_ui_theme::{
                     BackgroundMode, GradientDirection, THEME_ACCENT_SWATCHES,
                     THEME_BG_SWATCHES_DARK, THEME_BG_SWATCHES_LIGHT, ThemeAppearance, ThemePreset,
                     color,
@@ -6748,7 +6748,7 @@ impl Launcher {
             Some(Action::UiScale) => self.open_chooser(chooser::Kind::UiScale),
             Some(Action::ChooseUiScale(pct)) => {
                 self.catalog.config.ui_scale_percent = pct;
-                horizon_client::ui_theme::set_ui_scale_percent(pct);
+                crate::android_ui_theme::set_ui_scale_percent(pct);
                 self.catalog.config.save(&self.home)?;
                 self.chooser = None;
                 self.catalog.status = format!(
@@ -6863,7 +6863,7 @@ impl Launcher {
                     self.catalog.config.battery_perf_mode = false;
                     self.catalog.config.renderer = crate::catalog::RendererMode::Vulkan;
                 }
-                horizon_client::ui_theme::motion::set_reduced_motion(
+                crate::android_ui_theme::motion::set_reduced_motion(
                     self.catalog.config.super_perf_mode || self.catalog.config.battery_perf_mode,
                 );
                 self.catalog.config.save(&self.home)?;
@@ -6885,7 +6885,7 @@ impl Launcher {
                     self.catalog.config.device.display_hz = 0;
                 }
                 crate::device_runtime::configure(self.catalog.config.device);
-                horizon_client::ui_theme::motion::set_reduced_motion(
+                crate::android_ui_theme::motion::set_reduced_motion(
                     self.catalog.config.super_perf_mode || self.catalog.config.battery_perf_mode,
                 );
                 self.catalog.config.save(&self.home)?;
@@ -7717,7 +7717,7 @@ impl Launcher {
             Some(Action::ToggleLauncherAnimations) => {
                 self.catalog.config.disable_launcher_animations =
                     !self.catalog.config.disable_launcher_animations;
-                horizon_client::ui_theme::motion::set_launcher_animations_disabled(
+                crate::android_ui_theme::motion::set_launcher_animations_disabled(
                     self.catalog.config.disable_launcher_animations,
                 );
                 self.catalog.config.save(&self.home)?;
@@ -7731,7 +7731,7 @@ impl Launcher {
             Some(Action::ToggleGameAnimations) => {
                 let next = !self.catalog.config.disable_game_animations;
                 self.catalog.config.disable_game_animations = next;
-                horizon_client::ui_theme::motion::set_game_animations_disabled(next);
+                crate::android_ui_theme::motion::set_game_animations_disabled(next);
                 self.catalog.config.save(&self.home)?;
                 self.catalog.config.apply_experimental_to_game(&self.home);
                 self.modify_touch_settings(|t| t.disable_game_animations = next);
@@ -7777,7 +7777,7 @@ impl Launcher {
             }
             Some(Action::SelectThemePreset(preset)) => {
                 self.catalog.config.theme.apply_preset(preset);
-                horizon_client::ui_theme::set_active_theme(self.catalog.config.theme.resolve());
+                crate::android_ui_theme::set_active_theme(self.catalog.config.theme.resolve());
                 self.anim.trigger_theme_pulse();
                 self.catalog.config.save(&self.home)?;
                 self.catalog.status = format!("Applied '{}' theme.", preset.label());
@@ -7785,29 +7785,29 @@ impl Launcher {
             Some(Action::SetThemeAppearance(appearance)) => {
                 self.catalog.config.theme.appearance = appearance;
                 if self.catalog.config.theme.preset
-                    == horizon_client::ui_theme::ThemePreset::DaylightFrost
-                    && appearance == horizon_client::ui_theme::ThemeAppearance::Dark
+                    == crate::android_ui_theme::ThemePreset::DaylightFrost
+                    && appearance == crate::android_ui_theme::ThemeAppearance::Dark
                 {
                     self.catalog.config.theme.preset =
-                        horizon_client::ui_theme::ThemePreset::EmeraldForest;
+                        crate::android_ui_theme::ThemePreset::EmeraldForest;
                 }
-                horizon_client::ui_theme::set_active_theme(self.catalog.config.theme.resolve());
+                crate::android_ui_theme::set_active_theme(self.catalog.config.theme.resolve());
                 self.anim.trigger_theme_pulse();
                 self.catalog.config.save(&self.home)?;
                 self.catalog.status = format!("Switched to {}.", appearance.label());
             }
             Some(Action::SetThemeBackgroundMode(mode)) => {
                 let was_custom = self.catalog.config.theme.background_mode
-                    == horizon_client::ui_theme::BackgroundMode::Custom;
+                    == crate::android_ui_theme::BackgroundMode::Custom;
                 self.catalog.config.theme.background_mode = mode;
-                horizon_client::ui_theme::set_active_theme(self.catalog.config.theme.resolve());
+                crate::android_ui_theme::set_active_theme(self.catalog.config.theme.resolve());
                 self.anim.trigger_theme_pulse();
                 self.catalog.config.save(&self.home)?;
                 self.catalog.status = format!("Background style set to {}.", mode.label());
                 // Custom GIF: pick a file the first time, or when Custom is tapped again.
-                if mode == horizon_client::ui_theme::BackgroundMode::Custom
+                if mode == crate::android_ui_theme::BackgroundMode::Custom
                     && (was_custom
-                        || !(horizon_client::ui_theme::custom_background_loaded()
+                        || !(crate::android_ui_theme::custom_background_loaded()
                             || custom_background_file_exists(&self.home)))
                 {
                     match crate::documents::begin_into_dir(self.home.join("backgrounds")) {
@@ -7823,8 +7823,8 @@ impl Launcher {
             Some(Action::SetGradientDirection(dir)) => {
                 self.catalog.config.theme.gradient_direction = dir;
                 self.catalog.config.theme.background_mode =
-                    horizon_client::ui_theme::BackgroundMode::Gradient;
-                horizon_client::ui_theme::set_active_theme(self.catalog.config.theme.resolve());
+                    crate::android_ui_theme::BackgroundMode::Gradient;
+                crate::android_ui_theme::set_active_theme(self.catalog.config.theme.resolve());
                 self.anim.trigger_theme_pulse();
                 self.catalog.config.save(&self.home)?;
                 self.catalog.status = format!("Gradient direction set to {}.", dir.label());
@@ -7833,8 +7833,8 @@ impl Launcher {
                 self.catalog.config.theme.use_three_stops =
                     !self.catalog.config.theme.use_three_stops;
                 self.catalog.config.theme.background_mode =
-                    horizon_client::ui_theme::BackgroundMode::Gradient;
-                horizon_client::ui_theme::set_active_theme(self.catalog.config.theme.resolve());
+                    crate::android_ui_theme::BackgroundMode::Gradient;
+                crate::android_ui_theme::set_active_theme(self.catalog.config.theme.resolve());
                 self.anim.trigger_theme_pulse();
                 self.catalog.config.save(&self.home)?;
             }
@@ -7855,53 +7855,53 @@ impl Launcher {
                 };
                 self.catalog.config.theme.gradient_mid_pos = next;
                 self.catalog.config.theme.background_mode =
-                    horizon_client::ui_theme::BackgroundMode::Gradient;
-                horizon_client::ui_theme::set_active_theme(self.catalog.config.theme.resolve());
+                    crate::android_ui_theme::BackgroundMode::Gradient;
+                crate::android_ui_theme::set_active_theme(self.catalog.config.theme.resolve());
                 self.anim.trigger_theme_pulse();
                 self.catalog.config.save(&self.home)?;
             }
             Some(Action::SelectAccentSwatch(rgb)) => {
                 self.catalog.config.theme.custom_accent_hex =
-                    horizon_client::ui_theme::format_hex_color(rgb);
-                self.catalog.config.theme.preset = horizon_client::ui_theme::ThemePreset::Custom;
-                horizon_client::ui_theme::set_active_theme(self.catalog.config.theme.resolve());
+                    crate::android_ui_theme::format_hex_color(rgb);
+                self.catalog.config.theme.preset = crate::android_ui_theme::ThemePreset::Custom;
+                crate::android_ui_theme::set_active_theme(self.catalog.config.theme.resolve());
                 self.anim.trigger_theme_pulse();
                 self.catalog.config.save(&self.home)?;
             }
             Some(Action::SelectBgSwatch(rgb)) => {
                 self.catalog.config.theme.custom_bg_hex =
-                    horizon_client::ui_theme::format_hex_color(rgb);
-                self.catalog.config.theme.preset = horizon_client::ui_theme::ThemePreset::Custom;
+                    crate::android_ui_theme::format_hex_color(rgb);
+                self.catalog.config.theme.preset = crate::android_ui_theme::ThemePreset::Custom;
                 self.catalog.config.theme.background_mode =
-                    horizon_client::ui_theme::BackgroundMode::Solid;
-                horizon_client::ui_theme::set_active_theme(self.catalog.config.theme.resolve());
+                    crate::android_ui_theme::BackgroundMode::Solid;
+                crate::android_ui_theme::set_active_theme(self.catalog.config.theme.resolve());
                 self.anim.trigger_theme_pulse();
                 self.catalog.config.save(&self.home)?;
             }
             Some(Action::SelectGradStartSwatch(rgb)) => {
                 self.catalog.config.theme.gradient_start_hex =
-                    horizon_client::ui_theme::format_hex_color(rgb);
-                self.catalog.config.theme.preset = horizon_client::ui_theme::ThemePreset::Custom;
+                    crate::android_ui_theme::format_hex_color(rgb);
+                self.catalog.config.theme.preset = crate::android_ui_theme::ThemePreset::Custom;
                 self.catalog.config.theme.background_mode =
-                    horizon_client::ui_theme::BackgroundMode::Gradient;
-                horizon_client::ui_theme::set_active_theme(self.catalog.config.theme.resolve());
+                    crate::android_ui_theme::BackgroundMode::Gradient;
+                crate::android_ui_theme::set_active_theme(self.catalog.config.theme.resolve());
                 self.anim.trigger_theme_pulse();
                 self.catalog.config.save(&self.home)?;
             }
             Some(Action::SelectGradEndSwatch(rgb)) => {
                 self.catalog.config.theme.gradient_end_hex =
-                    horizon_client::ui_theme::format_hex_color(rgb);
-                self.catalog.config.theme.preset = horizon_client::ui_theme::ThemePreset::Custom;
+                    crate::android_ui_theme::format_hex_color(rgb);
+                self.catalog.config.theme.preset = crate::android_ui_theme::ThemePreset::Custom;
                 self.catalog.config.theme.background_mode =
-                    horizon_client::ui_theme::BackgroundMode::Gradient;
-                horizon_client::ui_theme::set_active_theme(self.catalog.config.theme.resolve());
+                    crate::android_ui_theme::BackgroundMode::Gradient;
+                crate::android_ui_theme::set_active_theme(self.catalog.config.theme.resolve());
                 self.anim.trigger_theme_pulse();
                 self.catalog.config.save(&self.home)?;
             }
             Some(Action::ResetTheme) => {
                 self.catalog.config.theme =
-                    horizon_client::ui_theme::LauncherThemeConfig::default();
-                horizon_client::ui_theme::set_active_theme(self.catalog.config.theme.resolve());
+                    crate::android_ui_theme::LauncherThemeConfig::default();
+                crate::android_ui_theme::set_active_theme(self.catalog.config.theme.resolve());
                 self.anim.trigger_theme_pulse();
                 self.catalog.config.save(&self.home)?;
                 self.catalog.status = "Theme reset to Horizon default (Obsidian Violet).".into();
@@ -8637,7 +8637,7 @@ fn custom_background_poll(home: &std::path::Path) {
     static LAST_CHECK: Mutex<Option<Instant>> = Mutex::new(None);
     static LOADED: Mutex<Option<(std::path::PathBuf, SystemTime)>> = Mutex::new(None);
     static LOADING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    if !horizon_client::ui_theme::active_theme().is_custom || LOADING.load(Ordering::Relaxed) {
+    if !crate::android_ui_theme::active_theme().is_custom || LOADING.load(Ordering::Relaxed) {
         return;
     }
     {
@@ -8678,7 +8678,7 @@ fn custom_background_poll(home: &std::path::Path) {
         let (path, _) = &key;
         match decode_custom_gif(path) {
             Ok(background) => {
-                horizon_client::ui_theme::set_custom_background(Some(background));
+                crate::android_ui_theme::set_custom_background(Some(background));
                 // Keep only the newest GIF on disk.
                 if let Some(dir) = path.parent()
                     && let Ok(entries) = std::fs::read_dir(dir)
@@ -8706,7 +8706,7 @@ fn custom_background_poll(home: &std::path::Path) {
 /// colours reduced to 12 bits so neighbouring cells merge into long runs).
 fn decode_custom_gif(
     path: &std::path::Path,
-) -> std::result::Result<horizon_client::ui_theme::CustomBackground, String> {
+) -> std::result::Result<crate::android_ui_theme::CustomBackground, String> {
     use image::{AnimationDecoder, imageops};
     const COLS: u32 = 80;
     const ROWS: u32 = 45;
@@ -8753,7 +8753,7 @@ fn decode_custom_gif(
     if frames.is_empty() {
         return Err("GIF has no frames".into());
     }
-    Ok(horizon_client::ui_theme::CustomBackground {
+    Ok(crate::android_ui_theme::CustomBackground {
         cols: COLS,
         rows: ROWS,
         frames,
