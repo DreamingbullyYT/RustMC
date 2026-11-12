@@ -116,7 +116,7 @@ fn cancel_gamepad_vibration() {
 /// Use the vibrator advertised by the active InputDevice, never an unrelated pad.
 /// Unsupported USB/Bluetooth firmware retains the existing phone feedback.
 fn vibrate_gamepad(pulse: horizon_client::gamepad::Pulse, amplitude: i32) -> bool {
-    let Some(id) = horizon_client::android_runtime::active_gamepad_id() else {
+    let Some(id) = crate::android_runtime::active_gamepad_id() else {
         return false;
     };
     with_context(|env, _| {
@@ -692,8 +692,8 @@ pub fn poll_gamepad_connections() {
         Ok((values, controllers))
     });
     if let Some((ids, controllers)) = ids {
-        horizon_client::android_runtime::retain_gamepads(&ids);
-        if horizon_client::android_runtime::active_gamepad_id().is_none() {
+        crate::android_runtime::retain_gamepads(&ids);
+        if crate::android_runtime::active_gamepad_id().is_none() {
             cancel_gamepad_vibration();
         }
         winit::platform::android::set_native_gamepads(&controllers);
