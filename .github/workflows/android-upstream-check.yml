@@ -34,11 +34,14 @@ jobs:
         run: git diff --check
       - name: Test source import and pinned revision policy
         run: python3 -m unittest discover -s tests -p 'test_upstream_pin.py' -v
-      - name: Set up JDK 17
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          gradle-version: '8.14'
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
@@ -65,3 +68,24 @@ jobs:
             --ndk-version 28.2.13676358 \
             --build-tools-version 35.0.0 \
             --check
+      - name: Prepare Android engine assets
+        run: python3 "$RUNNER_TEMP/horizon/tools/android_prepare.py" --java-home "$JAVA_HOME"
+      - name: Build signed debug APK
+        run: |
+          python3 "$RUNNER_TEMP/horizon/tools/android_build.py" --abi arm64-v8a --public --profile fast \
+            --sdk "$ANDROID_HOME" --java-home "${JAVA_HOME_17_X64:-$JAVA_HOME}" --gradle "$(command -v gradle)" \
+            --ndk-version 28.2.13676358 --build-tools-version 35.0.0 \
+            --dev-build "${GITHUB_RUN_NUMBER}.${GITHUB_SHA:0:12}" \
+            --dev-version-code "$((1000 + GITHUB_RUN_NUMBER))"
+      - name: Collect APK
+        run: |
+          mkdir -p dist
+          cp "$RUNNER_TEMP/horizon/.local/android/apk/arm64-v8a/horizon-android-public.apk" \
+            "dist/Horizon-Android-debug-arm64-v8a.apk"
+          (cd dist && sha256sum Horizon-Android-debug-arm64-v8a.apk > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: horizon-android-debug-arm64-v8a
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
