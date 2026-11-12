@@ -37,6 +37,8 @@ pub mod android_ui_theme;
 mod android_skin_head;
 #[path = "../../../android/adapters/source/client/ui_text.rs"]
 mod android_ui_text;
+#[path = "../../../android/adapters/source/client/ime_edit.rs"]
+mod android_ime_edit;
 #[path = "../../../android/adapters/source/client/touch_ui.rs"]
 pub mod touch_ui;
 
