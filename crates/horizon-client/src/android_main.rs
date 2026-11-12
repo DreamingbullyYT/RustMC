@@ -11,6 +11,8 @@ mod android_game;
 // Android-only services are compiled in this crate, not injected into the engine.
 #[path = "../../../android/adapters/source/render/android_gamepad.rs"]
 pub mod android_gamepad;
+#[path = "../../../android/adapters/source/render/android_keybinds.rs"]
+mod android_keybinds;
 #[path = "../../../android/adapters/source/render/android_runtime.rs"]
 pub mod android_runtime;
 #[path = "../../../android/adapters/source/render/keypad.rs"]
