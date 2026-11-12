@@ -51,16 +51,21 @@ anchor = "/// Start the game with trait mods in dispatch order.\npub fn main_wit
 if source.count(anchor) != 1:
     raise SystemExit("entry.rs: main_with insertion anchor changed")
 source = source.replace(anchor, helper + anchor, 1)
-# The helper now owns the extracted block; leave CLI parsing and process policy in main_with.
+# Recompute offsets after inserting the helper: the source grew before main_with.
+main_start = source.index(main_marker) + len(main_marker)
+args_start = source.index(args_marker, main_start)
 source = source[:main_start] + "\n    initialize_for_hosted_application(mods);\n" + source[args_start:]
-# These were moved to the helper. Avoid running them twice in desktop main_with.
+# Remove the old copies from main_with, keeping the new helper copies intact.
+main_body_start = source.index(main_marker)
+tail = source[main_body_start:]
 for line in (
     "    logging::set_line_hook(crate::native_client_hooks::native_log_line);\n",
     "    raise_open_file_limit();\n",
 ):
-    if source.count(line) != 1:
+    if tail.count(line) != 1:
         raise SystemExit(f"entry.rs: expected one remaining moved call: {line.strip()}")
-    source = source.replace(line, "", 1)
+    tail = tail.replace(line, "", 1)
+source = source[:main_body_start] + tail
 entry.write_text(source, encoding="utf-8")
 
 # 2. Let a native frontend supply explicit launch arguments instead of process argv.
