@@ -371,7 +371,7 @@ impl Launcher {
             window.clone(),
             false,
             Some(&gui.atlas),
-            Some(gui.panorama.as_ref()),
+            Some(&gui.panorama),
             None,
             api,
         )?;
