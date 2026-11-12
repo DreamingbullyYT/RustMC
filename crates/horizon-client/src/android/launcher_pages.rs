@@ -284,8 +284,8 @@ pub(super) enum Action {
     CloseProjectModal,
     SelectModalVersion(usize),
     InstallModalProject,
-    Import(horizon_client::content_files::Kind),
-    OpenFolder(horizon_client::content_files::Kind),
+    Import(crate::content_files::Kind),
+    OpenFolder(crate::content_files::Kind),
     ToggleSection(usize),
     ToggleLocal(usize),
     DeleteLocal(usize),
@@ -391,7 +391,7 @@ pub(super) enum Action {
     VirtualMouseSpeedDelta(f32),
     ButtonScaleDelta(f32),
     ToggleControlScheme,
-    SelectControlMode(horizon_client::touch::ControlStyle),
+    SelectControlMode(crate::touch::ControlStyle),
     CopyActivePreset,
     EditActivePresetMeta,
     ConfirmReplaceDuplicatePreset,
@@ -1246,7 +1246,7 @@ impl Launcher {
             let mut b = HudBatch::new([r.config.width, r.config.height]);
             tc.viewport(r.config.width, r.config.height);
             let profile_name = tc.settings.active_profile.clone();
-            horizon_client::touch_ui::draw_hud_editor(tc, &mut b, &gui.atlas, &profile_name, None);
+            crate::touch_ui::draw_hud_editor(tc, &mut b, &gui.atlas, &profile_name, None);
             if let Some(prev) = prev_cwd {
                 let _ = std::env::set_current_dir(prev);
             }
@@ -1492,8 +1492,8 @@ impl Launcher {
                 Action::CancelCatalogDownload,
             );
         } else if page == Page::Play {
-            use horizon_client::official_install::InstallStage;
-            let installed = horizon_client::official_install::ready(&self.home);
+            use crate::official_install::InstallStage;
+            let installed = crate::official_install::ready(&self.home);
             let installing = self.worker.is_some();
             let progress = *self
                 .install
@@ -1564,7 +1564,7 @@ impl Launcher {
                 );
             } else {
                 let game_home = self.catalog.config.game_home(&self.home);
-                let touch_cfg = horizon_client::touch::Settings::load_from(
+                let touch_cfg = crate::touch::Settings::load_from(
                     &game_home.join("horizon-touch.json"),
                 );
                 let card_y = 58.0 + slide_y;
@@ -1865,7 +1865,7 @@ impl Launcher {
                         .local
                         .iter()
                         .filter(|i| {
-                            i.kind == horizon_client::content_files::Kind::Mods && i.enabled
+                            i.kind == crate::content_files::Kind::Mods && i.enabled
                         })
                         .count()
                         + self.catalog.bundled_enabled.len();
@@ -1874,7 +1874,7 @@ impl Launcher {
                         .local
                         .iter()
                         .filter(|i| {
-                            i.kind == horizon_client::content_files::Kind::Shaders && i.enabled
+                            i.kind == crate::content_files::Kind::Shaders && i.enabled
                         })
                         .count();
                     let stat1 = ui.fit_text(
@@ -2006,9 +2006,9 @@ impl Launcher {
             );
 
             let kind = match page {
-                Page::Mods => horizon_client::content_files::Kind::Mods,
-                Page::Shaders => horizon_client::content_files::Kind::Shaders,
-                _ => horizon_client::content_files::Kind::Packs,
+                Page::Mods => crate::content_files::Kind::Mods,
+                Page::Shaders => crate::content_files::Kind::Shaders,
+                _ => crate::content_files::Kind::Packs,
             };
             let sub_y = 140.0 + slide_y;
             button(
@@ -2738,7 +2738,7 @@ impl Launcher {
         slide_y: f32,
     ) {
         use crate::catalog::CompilerMode;
-        use horizon_client::content_files::Kind;
+        use crate::content_files::Kind;
 
         let header_y = 60.0 + slide_y;
         ui.text(
@@ -2973,7 +2973,7 @@ impl Launcher {
         slide_y: f32,
     ) {
         use crate::catalog::{InstalledFilter, InstalledSubTab};
-        use horizon_client::content_files::Kind;
+        use crate::content_files::Kind;
 
         let header_y = 60.0 + slide_y;
         ui.text(
@@ -3248,7 +3248,7 @@ impl Launcher {
                     .or_else(|| raw_stem.strip_suffix(".hshader"))
                     .or_else(|| raw_stem.strip_suffix(".zip"))
                     .unwrap_or(raw_stem);
-                let canon_icon_id = horizon_client::jar_transpiler::sanitize_mod_id(raw_stem);
+                let canon_icon_id = crate::jar_transpiler::sanitize_mod_id(raw_stem);
                 let icon_entry = self
                     .catalog
                     .icons
@@ -5044,7 +5044,7 @@ impl Launcher {
         let game_home = self.catalog.config.game_home(&self.home);
         let opts = horizon_client::settings::Settings::load(&game_home.join("options.txt"));
         let touch_cfg =
-            horizon_client::touch::Settings::load_from(&game_home.join("horizon-touch.json"));
+            crate::touch::Settings::load_from(&game_home.join("horizon-touch.json"));
 
         match cat {
             SettingsCategory::Video => {
@@ -5930,10 +5930,10 @@ impl Launcher {
                 self.list_view = Some([list_top, list_bottom, max_scroll]);
 
                 let style = touch_cfg.control_style;
-                let is_mcpe = style == horizon_client::touch::ControlStyle::Mcpe;
-                let is_goy = style == horizon_client::touch::ControlStyle::GoyControl;
+                let is_mcpe = style == crate::touch::ControlStyle::Mcpe;
+                let is_goy = style == crate::touch::ControlStyle::GoyControl;
                 let sys_name = style.label();
-                let sys_presets = horizon_client::touch::Settings::list_presets(&game_home, style);
+                let sys_presets = crate::touch::Settings::list_presets(&game_home, style);
                 let preset_label = format!(
                     "{} ({} presets) v",
                     touch_cfg.preset_name,
@@ -5952,10 +5952,10 @@ impl Launcher {
                 );
                 let editor_title = format!("{} Control Editor", sys_name);
                 let editor_sub = match style {
-                    horizon_client::touch::ControlStyle::Mcpe => {
+                    crate::touch::ControlStyle::Mcpe => {
                         "Customize MCPE controls with exact Minecraft sprites, size, opacity & alignment"
                     }
-                    horizon_client::touch::ControlStyle::GoyControl => {
+                    crate::touch::ControlStyle::GoyControl => {
                         "Customize GoyControl buttons, custom keys, toggle, swipe & pass-through"
                     }
                 };
@@ -6217,7 +6217,7 @@ impl Launcher {
                             "Vanilla touch sprites, D-Pad & thumbstick",
                             "CLASSIC HUD",
                             is_mcpe,
-                            Action::SelectControlMode(horizon_client::touch::ControlStyle::Mcpe),
+                            Action::SelectControlMode(crate::touch::ControlStyle::Mcpe),
                         ),
                         (
                             "GoyControl",
@@ -6225,7 +6225,7 @@ impl Launcher {
                             "PRO OVERLAY",
                             is_goy,
                             Action::SelectControlMode(
-                                horizon_client::touch::ControlStyle::GoyControl,
+                                crate::touch::ControlStyle::GoyControl,
                             ),
                         ),
                     ]
@@ -6651,7 +6651,7 @@ impl Launcher {
         }
         self.feedback = action.map(|action| (action, std::time::Instant::now()));
         self.focus = None;
-        if action.is_some() && horizon_client::official_install::ready(&self.home) {
+        if action.is_some() && crate::official_install::ready(&self.home) {
             let audio = self.audio.get_or_insert_with(|| {
                 let mut audio = horizon_client::audio::Audio::new(
                     &self.home.join(".local/horizon-client/26.3"),
@@ -6949,7 +6949,7 @@ impl Launcher {
             // Controls & Control Editor actions
             Some(Action::SelectControlMode(style)) => {
                 let game_home = self.catalog.config.game_home(&self.home);
-                let mut touch = horizon_client::touch::Settings::load_from(
+                let mut touch = crate::touch::Settings::load_from(
                     &game_home.join("horizon-touch.json"),
                 );
                 touch.switch_control_system(&game_home, style);
@@ -6961,8 +6961,8 @@ impl Launcher {
             }
             Some(Action::OpenControlEditor) => {
                 let game_home = self.catalog.config.game_home(&self.home);
-                let mut tc = horizon_client::touch::TouchControls::default();
-                tc.settings = horizon_client::touch::Settings::load_from(
+                let mut tc = crate::touch::TouchControls::default();
+                tc.settings = crate::touch::Settings::load_from(
                     &game_home.join("horizon-touch.json"),
                 );
                 tc.open_editor();
@@ -6988,11 +6988,11 @@ impl Launcher {
             }
             Some(Action::ChooseControlProfile(idx)) => {
                 let game_home = self.catalog.config.game_home(&self.home);
-                let mut touch = horizon_client::touch::Settings::load_from(
+                let mut touch = crate::touch::Settings::load_from(
                     &game_home.join("horizon-touch.json"),
                 );
                 let style = touch.control_style;
-                let presets = horizon_client::touch::Settings::list_presets(&game_home, style);
+                let presets = crate::touch::Settings::list_presets(&game_home, style);
                 if let Some(meta) = presets.get(idx as usize) {
                     touch.select_preset(&game_home, style, &meta.id);
                     self.catalog.status = format!(
@@ -7006,7 +7006,7 @@ impl Launcher {
             }
             Some(Action::CopyActivePreset) => {
                 let game_home = self.catalog.config.game_home(&self.home);
-                let touch = horizon_client::touch::Settings::load_from(
+                let touch = crate::touch::Settings::load_from(
                     &game_home.join("horizon-touch.json"),
                 );
                 self.catalog.config.preset_edit_mode = "copy".into();
@@ -7021,7 +7021,7 @@ impl Launcher {
             }
             Some(Action::EditActivePresetMeta) => {
                 let game_home = self.catalog.config.game_home(&self.home);
-                let touch = horizon_client::touch::Settings::load_from(
+                let touch = crate::touch::Settings::load_from(
                     &game_home.join("horizon-touch.json"),
                 );
                 if touch.is_default_preset() {
@@ -7043,7 +7043,7 @@ impl Launcher {
             }
             Some(Action::SaveControlProfileAsNew) => {
                 let game_home = self.catalog.config.game_home(&self.home);
-                let touch = horizon_client::touch::Settings::load_from(
+                let touch = crate::touch::Settings::load_from(
                     &game_home.join("horizon-touch.json"),
                 );
                 self.catalog.config.preset_edit_mode = "copy".into();
@@ -7059,7 +7059,7 @@ impl Launcher {
             Some(Action::ConfirmReplaceDuplicatePreset) => {
                 if let Some((_, name, desc)) = self.catalog.duplicate_preset_confirm.take() {
                     let game_home = self.catalog.config.game_home(&self.home);
-                    let mut touch = horizon_client::touch::Settings::load_from(
+                    let mut touch = crate::touch::Settings::load_from(
                         &game_home.join("horizon-touch.json"),
                     );
                     if let Ok(meta) = touch.save_or_replace_preset_by_name(&game_home, &name, &desc)
@@ -7080,10 +7080,10 @@ impl Launcher {
             }
             Some(Action::ExportControlProfile) => {
                 let game_home = self.catalog.config.game_home(&self.home);
-                let touch = horizon_client::touch::Settings::load_from(
+                let touch = crate::touch::Settings::load_from(
                     &game_home.join("horizon-touch.json"),
                 );
-                let clean = horizon_client::touch::Settings::sanitize_profile_name(&touch.preset_id);
+                let clean = crate::touch::Settings::sanitize_profile_name(&touch.preset_id);
                 let suggested_name = format!("horizon-controls-{clean}.json");
                 if let Ok(saved_path) = touch.export_profile(&self.home, &game_home, &touch.preset_id) {
                     self.catalog.fm_clipboard = Some((vec![saved_path], false));
@@ -7117,13 +7117,13 @@ impl Launcher {
             }
             Some(Action::ImportControlProfile) => {
                 let game_home = self.catalog.config.game_home(&self.home);
-                horizon_client::touch::Settings::ensure_system_storage(
+                crate::touch::Settings::ensure_system_storage(
                     &game_home,
-                    horizon_client::touch::ControlStyle::Mcpe,
+                    crate::touch::ControlStyle::Mcpe,
                 );
-                horizon_client::touch::Settings::ensure_system_storage(
+                crate::touch::Settings::ensure_system_storage(
                     &game_home,
-                    horizon_client::touch::ControlStyle::GoyControl,
+                    crate::touch::ControlStyle::GoyControl,
                 );
                 match crate::documents::begin_control_import(game_home) {
                     Ok(()) => {
@@ -7160,9 +7160,9 @@ impl Launcher {
             Some(Action::ToggleControlScheme) => {
                 self.modify_touch_settings(|t| {
                     t.mode = match t.mode {
-                        horizon_client::touch::Mode::Crosshair => horizon_client::touch::Mode::Tap,
-                        horizon_client::touch::Mode::Tap => horizon_client::touch::Mode::Dpad,
-                        horizon_client::touch::Mode::Dpad => horizon_client::touch::Mode::Crosshair,
+                        crate::touch::Mode::Crosshair => crate::touch::Mode::Tap,
+                        crate::touch::Mode::Tap => crate::touch::Mode::Dpad,
+                        crate::touch::Mode::Dpad => crate::touch::Mode::Crosshair,
                     };
                 });
             }
@@ -7310,9 +7310,9 @@ impl Launcher {
             Some(Action::OpenFolder(kind)) => {
                 crate::platform::hide();
                 let rel_dir = match kind {
-                    horizon_client::content_files::Kind::Mods => "horizon-mods",
-                    horizon_client::content_files::Kind::Packs => "resourcepacks",
-                    horizon_client::content_files::Kind::Shaders => "shaderpacks",
+                    crate::content_files::Kind::Mods => "horizon-mods",
+                    crate::content_files::Kind::Packs => "resourcepacks",
+                    crate::content_files::Kind::Shaders => "shaderpacks",
                 };
                 self.catalog.page = crate::catalog::Page::Installed;
                 self.catalog.installed_sub_tab = crate::catalog::InstalledSubTab::FileManager;
@@ -8315,11 +8315,11 @@ impl Launcher {
         s.save(&path);
     }
 
-    fn modify_touch_settings(&mut self, f: impl FnOnce(&mut horizon_client::touch::Settings)) {
+    fn modify_touch_settings(&mut self, f: impl FnOnce(&mut crate::touch::Settings)) {
         let game_home = self.catalog.config.game_home(&self.home);
         let _ = std::fs::create_dir_all(&game_home);
         let mut t =
-            horizon_client::touch::Settings::load_from(&game_home.join("horizon-touch.json"));
+            crate::touch::Settings::load_from(&game_home.join("horizon-touch.json"));
         f(&mut t);
         if !t.is_default_preset() {
             let _ = t.save_replace_preset(&game_home);
@@ -8424,7 +8424,7 @@ impl Launcher {
                     (t.location.y as f32 / rh as f32).clamp(0.0, 1.0),
                 ];
                 let ended = matches!(t.phase, TouchPhase::Ended | TouchPhase::Cancelled);
-                let closed = horizon_client::touch_ui::touch_hud_editor(
+                let closed = crate::touch_ui::touch_hud_editor(
                     tc,
                     &mut b,
                     &gui.atlas,
