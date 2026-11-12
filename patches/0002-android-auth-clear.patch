@@ -1,7 +1,7 @@
 diff --git a/crates/horizon-client-render/src/auth.rs b/crates/horizon-client-render/src/auth.rs
 --- a/crates/horizon-client-render/src/auth.rs
 +++ b/crates/horizon-client-render/src/auth.rs
-@@ -126,9 +126,27 @@
+@@ -126,9 +126,29 @@
  static CURRENT: OnceLock<Arc<AuthSession>> = OnceLock::new();
 +#[cfg(target_os = "android")]
 +static ANDROID_CURRENT: std::sync::RwLock<Option<Arc<AuthSession>>> = std::sync::RwLock::new(None);
@@ -16,6 +16,7 @@ diff --git a/crates/horizon-client-render/src/auth.rs b/crates/horizon-client-re
 +    }
  }
  pub fn current() -> Option<Arc<AuthSession>> {
+-    CURRENT.get().cloned()
 +    #[cfg(not(target_os = "android"))]
 +    {
 +        CURRENT.get().cloned()
