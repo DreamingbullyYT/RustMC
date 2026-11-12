@@ -35,7 +35,7 @@ diff --git a/crates/horizon-protocol/src/resolver/dns.rs b/crates/horizon-protoc
 +        _ => None,
 +    }
 +}
-@@ -71,6 +87,12 @@
+@@ -71,6 +87,11 @@
  pub(super) fn query_srv(
      name: &str,
      servers: &[SocketAddr],
