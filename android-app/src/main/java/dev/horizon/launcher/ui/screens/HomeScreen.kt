@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.sp
 import dev.horizon.launcher.ui.theme.HorizonColors
 
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
+fun HomeScreen(modifier: Modifier = Modifier, coreStatus: String = "Core not initialized") {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -93,7 +93,8 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 
         Text("SYSTEM STATUS", color = HorizonColors.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
         StatusCard("Launcher interface", "Jetpack Compose shell is built", "READY", HorizonColors.Success)
-        StatusCard("Horizon engine", "Upstream runtime is not linked yet", "PENDING", HorizonColors.Warning)
+        StatusCard("Native game runtime", "Bundled engine build is being validated", "BUILDING", HorizonColors.Warning)
+        StatusCard("Horizon launcher core", coreStatus, if (coreStatus.contains("connected")) "READY" else "PENDING", if (coreStatus.contains("connected")) HorizonColors.Success else HorizonColors.Warning)
         StatusCard("Mod compatibility", "Engine and HNMod API validation pending", "PENDING", HorizonColors.Warning)
 
         Spacer(Modifier.height(2.dp))

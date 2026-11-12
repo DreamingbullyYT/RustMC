@@ -1,6 +1,8 @@
 package dev.horizon.launcher
 
 import android.os.Bundle
+import java.io.File
+import dev.horizon.launcher.data.Core
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.padding
@@ -26,14 +28,21 @@ import dev.horizon.launcher.ui.theme.HorizonColors
 import dev.horizon.launcher.ui.theme.HorizonTheme
 
 class MainActivity : ComponentActivity() {
+    private var coreStatus: String = "Core not initialized"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { HorizonApp() }
+        val home = File(filesDir, "launcher").apply { mkdirs() }
+        val initError = Core.init(home.absolutePath)
+        coreStatus = if (initError != null) "Core error: $initError"
+            else if (Core.loadError != null) "Core unavailable: ${Core.loadError}"
+            else "Core ${Core.coreVersion()} connected"
+        setContent { HorizonApp(coreStatus) }
     }
 }
 
 @Composable
-private fun HorizonApp() {
+private fun HorizonApp(coreStatus: String) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Home", "Instances", "Mods", "Controls", "Files", "Settings")
     val icons = listOf("⌂", "▦", "◇", "◎", "▤", "⚙")
@@ -60,7 +69,7 @@ private fun HorizonApp() {
             }
         ) { insets ->
             when (selectedTab) {
-                0 -> HomeScreen(Modifier.padding(insets))
+                0 -> HomeScreen(Modifier.padding(insets), coreStatus)
                 1 -> InstancesScreen(Modifier.padding(insets))
                 2 -> ModsScreen(Modifier.padding(insets))
                 3 -> TouchControlsScreen(Modifier.padding(insets))

@@ -28,3 +28,5 @@ include(":zalith:ColorPicker")
 project(":zalith:ColorPicker").projectDir = file("android-base/app/third_party/zalith/ColorPicker")
 include(":zalith:ControlEditor")
 project(":zalith:ControlEditor").projectDir = file("android-base/app/third_party/zalith/ControlEditor")
+
+include(":android-core")
