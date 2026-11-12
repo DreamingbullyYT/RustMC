@@ -13,9 +13,9 @@ use crate::{
 };
 use horizon_client::{
     hud::rgba,
-    skin_head::{self, HeadSkin},
-    ui_theme::{Face, Ui},
+
 };
+use crate::{android_skin_head as skin_head, android_ui_theme::{Face, Ui}};
 use std::{
     path::{Path, PathBuf},
     sync::mpsc,
