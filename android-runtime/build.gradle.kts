@@ -56,8 +56,9 @@ val prepareEngineData = tasks.register<Exec>("prepareHorizonAndroidEngineData") 
     workingDir = engineDir
     commandLine(
         "bash", "-lc",
-        "python3 tools/android_prepare.py && python3 tools/android_engine_data.py && rm -rf .local/android/minecraft .local/android/jdk .local/horizon-client"
+        "python3 ../../android-runtime/tools/patch_android_prepare.py tools/android_prepare.py && python3 tools/android_prepare.py && python3 tools/android_engine_data.py && rm -rf .local/android/minecraft .local/android/jdk .local/horizon-client"
     )
+    inputs.file(rootProject.file("android-runtime/tools/patch_android_prepare.py"))
     outputs.file(engineDir.resolve(".local/android/engine-data.zip"))
 }
 

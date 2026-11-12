@@ -18,3 +18,12 @@ No engine files are committed into rustMC. Android changes remain in the
 existing Android Edition overlay and its small patch against the pinned
 upstream engine. The Play flow is not enabled until the Kotlin launcher core,
 instance installation and NativeActivity launch are connected and tested.
+
+## Mojang manifest pin
+
+Before preparing engine tables, the build applies the small standalone helper
+`android-runtime/tools/patch_android_prepare.py` to the generated Android
+preparation script. It changes only the downloader to use the exact
+`manifest_sha1` in the pinned engine's `research-lock.json`, instead of the
+mutable version-manifest entry. Client/server jar hashes are still validated
+against the engine pins. No Rust engine source is changed.
