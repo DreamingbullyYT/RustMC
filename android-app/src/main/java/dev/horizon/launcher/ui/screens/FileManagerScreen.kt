@@ -49,7 +49,7 @@ fun FileManagerScreen(modifier: Modifier = Modifier) {
     val repository = remember(context) { MinecraftStorageRepository(context) }
     val scope = rememberCoroutineScope()
     var treeSelected by remember { mutableStateOf(repository.selectedTreeUri != null) }
-    var history by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
+    var history by remember(repository) { mutableStateOf(repository.rootDocumentId()?.let { listOf(it to "Minecraft") } ?: emptyList()) }
     val currentDocumentId = history.lastOrNull()?.first
     val currentFolderName = history.lastOrNull()?.second ?: "Minecraft"
     var entries by remember { mutableStateOf<List<StorageEntry>>(emptyList()) }
