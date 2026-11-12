@@ -2804,8 +2804,8 @@ impl Catalog {
         }
     }
 
-    pub fn edit(&mut self, out: horizon_client::osk::Output, home: &Path) {
-        use horizon_client::osk::Output;
+    pub fn edit(&mut self, out: crate::android_osk::Output, home: &Path) {
+        use crate::android_osk::Output;
         let is_name = self.editing == Some("name");
         let is_profile_name = self.editing == Some("profile_name");
         let is_theme_field = matches!(
