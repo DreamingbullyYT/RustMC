@@ -76,7 +76,7 @@ rustix = { version = "1", default-features = false, features = ["std", "time", "
 default = ["mods", "audio"]
 audio = ["horizon-engine/audio"]
 controllers = []
-mods = ["horizon-mods/runtime"]
+mods = [] # Launcher mod index/metadata only; HNMod execution adapter is a separate follow-up.
 
 [lints]
 workspace = true
