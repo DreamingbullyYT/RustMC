@@ -102,6 +102,7 @@ import dev.horizon.launcher.game.controls.KeyCatalog
 import dev.horizon.launcher.game.controls.KeyPickerDialog
 import dev.horizon.launcher.game.controls.LabeledSlider
 import dev.horizon.launcher.game.controls.LayerPanel
+import dev.horizon.launcher.game.controls.LayoutPresets
 import dev.horizon.launcher.game.controls.LayoutProfiles
 import dev.horizon.launcher.game.controls.LookTuner
 import dev.horizon.launcher.game.controls.ProfilesPanel
@@ -711,6 +712,12 @@ internal fun HorizonGameControls(
                                         runCatching { profiles.load(name) }
                                             .onSuccess { swapLayout(it); save(it); profiles.activeName = name }
                                             .onFailure { activity?.toast("Could not load $name: ${it.message}") }
+                                    }
+                                    MenuListLayout(
+                                        title = "Presets", items = LayoutPresets.labels(), currentItem = "",
+                                        getItemText = { it.ifEmpty { "Choose a preset" } },
+                                    ) { label ->
+                                        LayoutPresets.byLabel(label)?.let { swapLayout(it); save(it); profiles.activeName = "" }
                                     }
                                     MenuTextButton(text = "Import layout file") {
                                         activity?.chooseTouchLayout { imported -> swapLayout(imported); save(imported); profiles.activeName = "" }
