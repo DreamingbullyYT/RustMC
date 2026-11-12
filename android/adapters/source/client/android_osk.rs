@@ -6,7 +6,25 @@
 //! the way typed keys reach it.
 use crate::gamepad::{Button, GlyphStyle};
 use crate::android_ui_theme::{self, Face, Ui, color};
+use crate::android_ui_theme as ui_theme;
 use winit::keyboard::KeyCode;
+
+fn button_label(button: Button, style: GlyphStyle) -> &'static str {
+    let i = button as usize;
+    match style {
+        GlyphStyle::PlayStation => [
+            "×", "○", "□", "△", "L1", "R1", "L2", "R2", "Create", "Options", "L3", "R3", "↑",
+            "↓", "←", "→",
+        ][i],
+        GlyphStyle::Nintendo => [
+            "B", "A", "Y", "X", "L", "R", "ZL", "ZR", "−", "+", "LS", "RS", "↑", "↓", "←", "→",
+        ][i],
+        GlyphStyle::Xbox | GlyphStyle::Auto => [
+            "A", "B", "X", "Y", "LB", "RB", "LT", "RT", "View", "Menu", "LS", "RS", "↑", "↓",
+            "←", "→",
+        ][i],
+    }
+}
 
 /// What a key press does to the focused field.
 #[derive(Clone, Debug, PartialEq)]
@@ -366,7 +384,7 @@ impl Keyboard {
         ];
         let line: Vec<String> = hints
             .iter()
-            .map(|(b, what)| format!("{} {what}", b.label(glyphs)))
+            .map(|(b, what)| format!("{} {what}", button_label(*b, glyphs)))
             .collect();
         ui.text_centered(
             Face::Regular,
