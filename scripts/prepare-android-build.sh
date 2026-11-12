@@ -39,6 +39,10 @@ done
 # account.rs declares account::ely and account::session as sibling source modules.
 cp -a "$ROOT/launcher/src/account" "$ENGINE/launcher/src/"
 
+# Preserve the original launcher child modules required by browser.rs and skins.rs.
+cp -a "$ROOT/launcher/src/browser" "$ENGINE/launcher/src/"
+cp -a "$ROOT/launcher/src/skins" "$ENGINE/launcher/src/"
+
 # Original Gradle app and its Android build tooling.
 mkdir -p "$ENGINE/packaging"
 cp -a "$ROOT/packaging/android" "$ENGINE/packaging/"
