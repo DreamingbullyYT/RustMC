@@ -247,3 +247,60 @@ exposed as a hosted handler without changing game/render behavior. Do not
 implement a second event loop or start the engine in a detached process.
 
 No source code or APK was changed by this audit update.
+
+
+### Confirmed original single-loop handoff (launcher and fork implementation)
+
+A further trace of the original Android `Launcher` resolves how its game handler
+is hosted:
+
+- On Play, `Launcher::activate` calls `game_launch::start(request)`, drops
+  its launcher renderer/window/gui references, stores the returned handler in
+  `self.game`, and calls `game.resumed(events)` using the existing
+  `ActiveEventLoop`.
+- While `self.game` is set, the same `Launcher::ApplicationHandler`
+  forwards `resumed`, `suspended`, `window_event`, `device_event` and
+  `about_to_wait` to that handler. When the game ends, it restores the
+  launcher. There is no nested event loop.
+- The fork's `game::android_game(arguments)` parses explicit arguments,
+  prepares Android settings/runtime, and returns
+  `Box<dyn ApplicationHandler>` containing `loading_app(...)`.
+- The fork's `loading_app` constructs the existing
+  `loading_screen::App::Loading` without running an event loop. Desktop
+  `run_loading` calls the same factory and runs it in its own event loop.
+
+This is the proven integration pattern to preserve. The upstream equivalent
+should expose a narrow factory that returns its existing loading/game
+`ApplicationHandler` for the Android launcher to host. It should not expose
+or recreate an `EventLoop` for Android.
+
+### Corrected upstream port plan
+
+The exact fork factory pattern is now known, but upstream currently keeps
+`loading_app`, `App`, `Loading`, and `Split` private and constructs the
+loading app inside `resource_loader::run_loading`. A minimal port should:
+
+1. Factor the construction portion of upstream `resource_loader::run_loading`
+   into a crate-visible factory returning the existing app handler, while
+   keeping the desktop function responsible for creating/running its own loop
+   and doing its existing post-loop report/error handling.
+2. Add an explicit-arguments Android/game launch entry in upstream
+   `game` that prepares the same upstream options/settings/resources and
+   returns that handler, rather than reading process arguments and running a
+   loop. Preserve the upstream resource loading, startup screen, renderer,
+   game handoff and `Split` unchanged.
+3. Factor the shared hook/allocator/logging/engine initialization in
+   `entry::main_with` into an idempotent or explicitly one-shot setup API
+   that Android calls before constructing the game handler. Desktop
+   `main_with` retains its existing CLI, error and process-exit behavior.
+4. Let the original Android `Launcher` continue forwarding lifecycle and
+   input events to the returned handler, as it already does. Android-only
+   platform adapters remain in the Android crate; do not add Android
+   conditionals to the renderer/game simulation.
+
+The upstream changes should be limited to these reusable API seams. No
+Android-specific code is to be injected into `game.rs` via macros/includes,
+and no second Winit event loop is to be created.
+
+This remains an audit/design update only; no upstream engine source or APK
+has been changed.
