@@ -46,7 +46,9 @@ fun UpdaterScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     var release by remember { mutableStateOf<ReleaseInfo?>(null) }
     var progress by remember { mutableStateOf<DownloadProgress?>(null) }
-    var downloadId by remember { mutableStateOf<Long?>(null) }
+    val restoredDownload = remember(updater) { updater.restorePendingDownload() }
+    var downloadId by remember { mutableStateOf(restoredDownload?.id) }
+    var pendingAsset by remember { mutableStateOf(restoredDownload?.asset) }
     var verification by remember { mutableStateOf<ChecksumResult?>(null) }
     var checking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -71,29 +73,32 @@ fun UpdaterScreen(modifier: Modifier = Modifier) {
 
     LaunchedEffect(Unit) { checkForUpdates() }
 
-    LaunchedEffect(downloadId) {
+    LaunchedEffect(downloadId, pendingAsset) {
         val id = downloadId ?: return@LaunchedEffect
+        val asset = pendingAsset ?: return@LaunchedEffect
         while (true) {
             val state = withContext(Dispatchers.IO) { updater.queryDownload(id) }
             progress = state
             if (state == null || state.status == DownloadManager.STATUS_SUCCESSFUL || state.status == DownloadManager.STATUS_FAILED) {
                 if (state?.status == DownloadManager.STATUS_SUCCESSFUL) {
-                    val asset = release?.apk
-                    if (asset != null) {
-                        try {
-                            verification = withContext(Dispatchers.IO) { updater.verifyDownloadedApk(asset) }
-                            message = if (verification?.verified == true) {
-                                "APK descărcat și verificat SHA-256."
-                            } else {
-                                "APK descărcat, dar checksum-ul public lipsește sau nu corespunde. Nu îl instala."
-                            }
-                        } catch (e: Exception) {
-                            error = e.message ?: "Verificarea APK-ului a eșuat."
+                    try {
+                        verification = withContext(Dispatchers.IO) { updater.verifyDownloadedApk(asset) }
+                        message = if (verification?.verified == true) {
+                            "APK descărcat și verificat SHA-256."
+                        } else {
+                            "APK descărcat, dar checksum-ul public lipsește sau nu corespunde. Nu îl instala."
                         }
+                    } catch (e: Exception) {
+                        error = e.message ?: "Verificarea APK-ului a eșuat."
                     }
                 } else if (state?.status == DownloadManager.STATUS_FAILED) {
                     error = "Descărcarea a eșuat (cod ${state.reason})."
+                } else if (state == null) {
+                    error = "Descărcarea salvată nu mai există în Android Download Manager."
                 }
+                withContext(Dispatchers.IO) { updater.clearPendingDownload() }
+                downloadId = null
+                pendingAsset = null
                 break
             }
             delay(500)
@@ -123,6 +128,7 @@ fun UpdaterScreen(modifier: Modifier = Modifier) {
                                     progress = null
                                     error = null
                                     message = "Descărcarea a fost pornită în Android Download Manager."
+                                    pendingAsset = asset
                                     downloadId = withContext(Dispatchers.IO) { updater.enqueueApkDownload(asset) }
                                 } catch (e: Exception) {
                                     error = e.message ?: "Nu s-a putut porni descărcarea."

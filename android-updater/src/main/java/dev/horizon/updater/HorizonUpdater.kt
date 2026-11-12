@@ -12,43 +12,21 @@ import java.net.URL
 import java.security.MessageDigest
 import java.util.Locale
 
-data class ReleaseAsset(
-    val name: String,
-    val downloadUrl: String,
-    val sizeBytes: Long,
-    val sha256: String?
-)
+data class ReleaseAsset(val name: String, val downloadUrl: String, val sizeBytes: Long, val sha256: String?)
+data class ReleaseInfo(val tag: String, val title: String, val changelog: String, val pageUrl: String, val publishedAt: String?, val apk: ReleaseAsset, val isPrerelease: Boolean)
+data class PendingApkDownload(val id: Long, val asset: ReleaseAsset)
 
-data class ReleaseInfo(
-    val tag: String,
-    val title: String,
-    val changelog: String,
-    val pageUrl: String,
-    val publishedAt: String?,
-    val apk: ReleaseAsset,
-    val isPrerelease: Boolean
-)
-
-data class DownloadProgress(
-    val status: Int,
-    val downloadedBytes: Long,
-    val totalBytes: Long,
-    val reason: Int
-) {
+data class DownloadProgress(val status: Int, val downloadedBytes: Long, val totalBytes: Long, val reason: Int) {
     val percent: Int
         get() = if (totalBytes > 0) ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100) else 0
 }
 
-data class ChecksumResult(
-    val file: File,
-    val actualSha256: String,
-    val verified: Boolean,
-    val expectedSha256: String?
-)
+data class ChecksumResult(val file: File, val actualSha256: String, val verified: Boolean, val expectedSha256: String?)
 
 class HorizonUpdater(context: Context) {
     private val appContext = context.applicationContext
     private val downloadManager = appContext.getSystemService(DownloadManager::class.java)
+    private val preferences = appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
     fun checkLatestRelease(): ReleaseInfo {
         val connection = (URL(RELEASES_API).openConnection() as HttpURLConnection).apply {
@@ -110,7 +88,8 @@ class HorizonUpdater(context: Context) {
             if (connection.responseCode !in 200..299) return null
             val text = connection.inputStream.bufferedReader().use { it.readText() }
             val line = text.lineSequence().firstOrNull { it.contains(apkName) } ?: text.lineSequence().firstOrNull()
-            line?.trim()?.split(Regex("\\s+"))?.firstOrNull()?.takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) }?.lowercase(Locale.ROOT)
+            line?.trim()?.split(Regex("\\s+"))?.firstOrNull()
+                ?.takeIf { it.matches(Regex("[a-fA-F0-9]{64}")) }?.lowercase(Locale.ROOT)
         } catch (_: Exception) {
             null
         } finally {
@@ -128,7 +107,25 @@ class HorizonUpdater(context: Context) {
             .setAllowedOverRoaming(false)
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             .setDestinationInExternalFilesDir(appContext, Environment.DIRECTORY_DOWNLOADS, safeName)
-        return downloadManager.enqueue(request)
+        val id = downloadManager.enqueue(request)
+        preferences.edit().putLong(KEY_DOWNLOAD_ID, id).putString(KEY_ASSET_NAME, asset.name)
+            .putString(KEY_ASSET_URL, asset.downloadUrl).putLong(KEY_ASSET_SIZE, asset.sizeBytes)
+            .putString(KEY_ASSET_SHA256, asset.sha256).apply()
+        return id
+    }
+
+    fun restorePendingDownload(): PendingApkDownload? {
+        if (!preferences.contains(KEY_DOWNLOAD_ID)) return null
+        val id = preferences.getLong(KEY_DOWNLOAD_ID, -1L)
+        val name = preferences.getString(KEY_ASSET_NAME, null) ?: return null
+        val url = preferences.getString(KEY_ASSET_URL, null) ?: return null
+        if (id < 0L || !url.startsWith("https://")) return null
+        return PendingApkDownload(id, ReleaseAsset(name, url, preferences.getLong(KEY_ASSET_SIZE, 0L), preferences.getString(KEY_ASSET_SHA256, null)))
+    }
+
+    fun clearPendingDownload() {
+        preferences.edit().remove(KEY_DOWNLOAD_ID).remove(KEY_ASSET_NAME).remove(KEY_ASSET_URL)
+            .remove(KEY_ASSET_SIZE).remove(KEY_ASSET_SHA256).apply()
     }
 
     fun queryDownload(id: Long): DownloadProgress? {
@@ -164,13 +161,23 @@ class HorizonUpdater(context: Context) {
         return ChecksumResult(file, actual, expected != null && actual.equals(expected, true), expected)
     }
 
-    fun cancelDownload(id: Long): Int = downloadManager.remove(id)
+    fun cancelDownload(id: Long): Int {
+        val removed = downloadManager.remove(id)
+        clearPendingDownload()
+        return removed
+    }
 
     private fun Cursor.getIntColumn(name: String): Int = getInt(getColumnIndexOrThrow(name))
     private fun Cursor.getLongColumn(name: String): Long = getLong(getColumnIndexOrThrow(name))
 
     companion object {
         private const val RELEASES_API = "https://api.github.com/repos/DreamingbullyYT/rustMC/releases/latest"
+        private const val PREFERENCES = "horizon_updater"
+        private const val KEY_DOWNLOAD_ID = "download_id"
+        private const val KEY_ASSET_NAME = "asset_name"
+        private const val KEY_ASSET_URL = "asset_url"
+        private const val KEY_ASSET_SIZE = "asset_size"
+        private const val KEY_ASSET_SHA256 = "asset_sha256"
         const val STATUS_PENDING = DownloadManager.STATUS_PENDING
         const val STATUS_RUNNING = DownloadManager.STATUS_RUNNING
         const val STATUS_PAUSED = DownloadManager.STATUS_PAUSED
