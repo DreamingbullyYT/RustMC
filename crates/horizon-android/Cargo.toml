@@ -14,7 +14,7 @@ horizon-chat-filter = { path = "../horizon-chat-filter" }
 horizon-narrator = { path = "../horizon-narrator" }
 horizon-client-input = { path = "../horizon-client-input" }
 horizon-anticheat = { path = "../horizon-anticheat" }
-horizon-client = { path = "../horizon-client", default-features = false }
+horizon-engine = { package = "horizon-client", path = "../horizon-client", default-features = false }
 android_logger = "0.15"
 regex = "1"
 horizon-hdr = { path = "../horizon-hdr" }
@@ -74,9 +74,9 @@ rustix = { version = "1", default-features = false, features = ["std", "time", "
 
 [features]
 default = ["mods", "audio"]
-audio = ["horizon-client/audio"]
+audio = ["horizon-engine/audio"]
 controllers = []
-mods = ["horizon-client/mods", "horizon-mods/runtime"]
+mods = ["horizon-engine/mods", "horizon-mods/runtime"]
 
 [lints]
 workspace = true

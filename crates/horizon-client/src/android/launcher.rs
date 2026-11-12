@@ -1,6 +1,6 @@
 //! A native Rust installer and version screen, sharing the game's Vulkan renderer.
 use crate::catalog::{Catalog, Page};
-use crate::game;
+use crate::android_game as game;
 #[path = "chooser.rs"]
 mod chooser;
 #[path = "launcher_gesture.rs"]

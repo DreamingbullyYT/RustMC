@@ -1,10 +1,40 @@
 // Android's native entry point. The simulation and renderer are shared with desktop.
 
+extern crate horizon_engine;
+pub use horizon_engine::*;
+
+#[path = "../../../android/adapters/horizon_client.rs"]
+mod horizon_client;
+#[path = "../../../android/adapters/game.rs"]
+mod android_game;
+
+// Android-only services are compiled in this crate, not injected into the engine.
+#[path = "../../../android/adapters/source/render/android_gamepad.rs"]
+pub mod android_gamepad;
+#[path = "../../../android/adapters/source/render/android_runtime.rs"]
+pub mod android_runtime;
+#[path = "../../../android/adapters/source/render/keypad.rs"]
+pub mod keypad;
+#[path = "../../../android/adapters/source/render/touch.rs"]
+pub mod touch;
+#[path = "../../../android/adapters/source/client/android_resources.rs"]
+pub mod android_resources;
+#[path = "../../../android/adapters/source/client/content_files.rs"]
+pub mod content_files;
+#[path = "../../../android/adapters/source/client/discord_presence.rs"]
+pub mod discord_presence;
+#[path = "../../../android/adapters/source/client/jar_transpiler.rs"]
+pub mod jar_transpiler;
+#[path = "../../../android/adapters/source/client/official_install.rs"]
+pub mod official_install;
+#[path = "../../../android/adapters/source/client/resource_install.rs"]
+pub mod resource_install;
+#[path = "../../../android/adapters/source/client/touch_ui.rs"]
+pub mod touch_ui;
+
 pub use horizon_client::mod_list;
 
-#[allow(dead_code, clippy::collapsible_match)]
-// Shared vanilla match structure and desktop harnesses.
-mod game;
+// The gameplay module itself comes from the pinned upstream client crate.
 #[path = "android/game_launch.rs"]
 mod game_launch;
 #[path = "android/launcher.rs"]
@@ -199,7 +229,11 @@ fn init_logging() {
 
 #[unsafe(no_mangle)]
 fn android_main(app: AndroidApp) {
-    horizon_client::mod_api::install_runtime_hooks(Default::default());
+    init_logging();
+    if let Err(error) = horizon_client::entry::initialize_for_hosted_application(Default::default()) {
+        log::error!("Horizon engine initialization failed: {error}");
+        return;
+    }
     use winit::platform::android::activity::input::Axis;
     for axis in [
         Axis::Vscroll,
@@ -209,13 +243,12 @@ fn android_main(app: AndroidApp) {
     ] {
         app.enable_motion_axis(axis);
     }
-    init_logging();
     let Some(home) = app.internal_data_path() else {
         log::error!("Android supplied no application data directory");
         return;
     };
     backend::initialize(home.clone());
-    horizon_client::logging::set_private_home(home.clone());
+    horizon_client::logging::set_game_home(home.clone());
     if let Err(error) = diagnostics::initialize(&home, serde_json::json!({})) {
         log::error!("Cannot initialize local diagnostics: {error}");
     }
