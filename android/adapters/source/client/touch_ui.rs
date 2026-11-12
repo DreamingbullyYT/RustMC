@@ -1,7 +1,7 @@
 //! Android menu gestures and auxiliary keys, independent of gameplay fingers.
 use crate::{
     hud::{HudAtlas, HudBatch, rgba},
-    osk::{Keyboard, Output},
+    android_osk::{Keyboard, Output},
 };
 use std::{
     cell::Cell,
