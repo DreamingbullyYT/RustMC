@@ -2205,7 +2205,7 @@ impl Catalog {
                 crate::shader_catalog::install(source.as_ref(), &project, &game, &report)?
             } else if project.kind == Kind::Shader
                 && project.source == browser::SourceId::Horizon
-                && horizon_shader_api::builtin_shader_pack(&project.id).is_some()
+                && horizon_shader_api::package::builtin_shader_pack(&project.id).is_some()
             {
                 crate::shader_catalog::install_horizon_builtin_shader(&project, &game, &report)?
             } else if project.kind == Kind::Mod
