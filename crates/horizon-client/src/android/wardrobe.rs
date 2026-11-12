@@ -501,7 +501,7 @@ impl Wardrobe {
         w: f32,
         top: f32,
     ) {
-        use horizon_client::ui_theme::{Icon, active_theme, motion};
+        use crate::android_ui_theme::{Icon, active_theme, motion};
         let theme = active_theme();
         let now = std::time::Instant::now();
         let tab_t = motion::spring_expressive_default(motion::progress(self.tab_changed_at, now, 0.24));
