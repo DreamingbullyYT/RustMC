@@ -778,7 +778,7 @@ pub fn sync_mods_folder(profile_root: &Path) {
 
     // 2. Sync enabled built-in Horizon mods (ANDROID_BUNDLED) and any enabled mod IDs in horizon-mods.txt
     let on = crate::mod_list::ModList::load(profile_root);
-    for &(b_id, b_title, b_desc) in &crate::mod_list::ANDROID_BUNDLED {
+    for &(b_id, b_title, b_desc) in &crate::android_mod_list::ANDROID_BUNDLED {
         let descriptor = mods_dir.join(format!("{b_id}.mod.json"));
         if on.enabled.contains(b_id) && !on.disabled.contains(b_id) {
             if !descriptor.exists() {
