@@ -80,6 +80,6 @@ pub fn android_game(arguments: Vec<String>) -> Result<Box<dyn ApplicationHandler
 
 /// Upstream owns gameplay/mod lifecycle; there is no fork-side global registry to reset here.
 pub fn android_reset_bundled_mods() {
-    crate::horizon_client::narrator::stop();
+    horizon_narrator::stop();
     crate::horizon_client::discord_presence::stop();
 }
