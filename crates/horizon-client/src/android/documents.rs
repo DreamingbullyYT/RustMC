@@ -858,7 +858,7 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
                 on.disabled.remove(&mod_id);
                 on.enabled.insert(mod_id.clone());
                 if ext == "mrpack" {
-                    if let Ok((pack, rows, count)) = crate::android_port::port_modpack_natively(
+                    if let Ok((pack, rows, count)) = horizon_port_pack::android_port::port_modpack_natively(
                         &dest,
                         profile_root,
                         &|stage_msg, p| set_progress("Porting .mrpack Modpack...", stage_msg, Some(p)),
@@ -1057,7 +1057,7 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
                 on.disabled.remove(&mod_id);
                 on.enabled.insert(mod_id.clone());
                 if ext == "mrpack"
-                    && let Ok((pack, rows, count)) = crate::android_port::port_modpack_natively(
+                    && let Ok((pack, rows, count)) = horizon_port_pack::android_port::port_modpack_natively(
                         &target,
                         &request.home,
                         &|stage_msg, p| set_progress("Porting .mrpack Modpack...", stage_msg, Some(p)),
