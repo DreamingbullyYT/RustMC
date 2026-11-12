@@ -1,0 +1,212 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 1944ef889..d29d9d4cd 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -9,6 +9,8 @@ members = [
+     "crates/horizon-world",
+     "crates/horizon-client",
+     "crates/horizon-client-lib",
++    "crates/horizon-android-game",
++    "crates/horizon-android-installer",
+     "crates/horizon-client-core",
+     "crates/horizon-client-input",
+     "crates/horizon-client-render",
+diff --git a/crates/horizon-client-input/Cargo.toml b/crates/horizon-client-input/Cargo.toml
+index e1d7cf72b..47ec435b8 100644
+--- a/crates/horizon-client-input/Cargo.toml
++++ b/crates/horizon-client-input/Cargo.toml
+@@ -12,12 +12,14 @@ winit = "0.30.13"
+ # The window icon.
+ horizon-theme = { path = "../horizon-theme" }
+ png = "0.18"
+-arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
+ # The DualSense's trigger effects (the `controllers` feature).
+ horizon-dualsense = { path = "../horizon-dualsense", optional = true }
+ 
+ [features]
+ controllers = ["dep:horizon-dualsense"]
+ 
++[target.'cfg(not(target_os = "android"))'.dependencies]
++arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
++
+ [lints]
+ workspace = true
+diff --git a/crates/horizon-client-input/src/clipboard.rs b/crates/horizon-client-input/src/clipboard.rs
+index eaf2a2274..3c3199518 100644
+--- a/crates/horizon-client-input/src/clipboard.rs
++++ b/crates/horizon-client-input/src/clipboard.rs
+@@ -125,6 +125,7 @@ pub trait Clipboard {
+ /// game can still be pasted in the game.
+ #[derive(Default)]
+ pub struct SystemClipboard {
++    #[cfg(not(target_os = "android"))]
+     system: Option<arboard::Clipboard>,
+     /// The text Horizon last copied (`horizon-ctl status`).
+     copied: Option<String>,
+@@ -135,6 +136,7 @@ impl SystemClipboard {
+     pub fn copied(&self) -> Option<&str> {
+         self.copied.as_deref()
+     }
++    #[cfg(not(target_os = "android"))]
+     fn system(&mut self) -> Option<&mut arboard::Clipboard> {
+         if self.system.is_none() {
+             self.system = arboard::Clipboard::new().ok();
+@@ -145,16 +147,21 @@ impl SystemClipboard {
+ 
+ impl Clipboard for SystemClipboard {
+     fn get(&mut self) -> String {
+-        let Some(system) = self.system() else {
+-            return self.copied.clone().unwrap_or_default();
+-        };
+-        match system.get_text() {
+-            Ok(text) => text,
+-            Err(arboard::Error::ContentNotAvailable) => String::new(),
+-            Err(_) => {
+-                // A lost connection (a restarted compositor): reconnect next time.
+-                self.system = None;
+-                String::new()
++        #[cfg(target_os = "android")]
++        return self.copied.clone().unwrap_or_default();
++        #[cfg(not(target_os = "android"))]
++        {
++            let Some(system) = self.system() else {
++                return self.copied.clone().unwrap_or_default();
++            };
++            match system.get_text() {
++                Ok(text) => text,
++                Err(arboard::Error::ContentNotAvailable) => String::new(),
++                Err(_) => {
++                    // A lost connection (a restarted compositor): reconnect next time.
++                    self.system = None;
++                    String::new()
++                }
+             }
+         }
+     }
+@@ -163,6 +170,7 @@ impl Clipboard for SystemClipboard {
+             return;
+         }
+         self.copied = Some(text.to_owned());
++        #[cfg(not(target_os = "android"))]
+         if let Some(system) = self.system()
+             && system.set_text(text.to_owned()).is_err()
+         {
+diff --git a/crates/horizon-client-input/src/keybinds.rs b/crates/horizon-client-input/src/keybinds.rs
+index 439df2a0b..601b92bdf 100644
+--- a/crates/horizon-client-input/src/keybinds.rs
++++ b/crates/horizon-client-input/src/keybinds.rs
+@@ -288,6 +288,8 @@ pub use horizon_client_core::key_display::display_name;
+ /// that key from now on (`key_display::learn_layout`), so an AZERTY player's
+ /// Q key shows A.
+ pub fn learn_layout(event: &winit::event::KeyEvent) {
++    #[cfg(not(target_os = "android"))]
++    {
+     use winit::keyboard::{Key, PhysicalKey};
+     use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
+     let PhysicalKey::Code(code) = event.physical_key else {
+@@ -302,6 +304,9 @@ pub fn learn_layout(event: &winit::event::KeyEvent) {
+         Key::Dead(Some(c)) => learn(name, c.encode_utf8(&mut [0; 4])),
+         _ => {}
+     }
++    }
++    #[cfg(target_os = "android")]
++    let _ = event;
+ }
+ 
+ /// Current bindings by mapping name.
+diff --git a/crates/horizon-client-render/src/gfx.rs b/crates/horizon-client-render/src/gfx.rs
+index cf62c2528..ca5ef1c2f 100644
+--- a/crates/horizon-client-render/src/gfx.rs
++++ b/crates/horizon-client-render/src/gfx.rs
+@@ -4580,6 +4580,15 @@ impl Renderer {
+             .unwrap_or_else(std::sync::PoisonError::into_inner) =
+             self.surface.take().and_then(|s| Arc::try_unwrap(s).ok());
+     }
++    /// Drop the window surface and any spare: Android destroys the native window when the app
++    /// is paused, so a surface kept across that is dead and draws black.
++    pub fn drop_surface(&mut self) {
++        self.surface = None;
++        *self
++            .spare_surface
++            .get_mut()
++            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
++    }
+     /// Reattach a window after surface loss or a failed renderer replacement.
+     pub fn recreate_surface(&mut self) -> Result<()> {
+         self.queue.wait();
+diff --git a/crates/horizon-client/src/entry.rs b/crates/horizon-client/src/entry.rs
+index 2fd12c0c6..b25fcb7b8 100644
+--- a/crates/horizon-client/src/entry.rs
++++ b/crates/horizon-client/src/entry.rs
+@@ -190,6 +190,8 @@ pub fn main_with(mods: crate::mod_api::Mods) {
+             eprintln!("Press Enter to close.");
+             let _ = std::io::stdin().read_line(&mut String::new());
+         }
++        // Android: the game shares the launcher's process, so a failed game must not end it.
++        #[cfg(not(target_os = "android"))]
+         std::process::exit(if usage {
+             game::exit_code::USAGE
+         } else {
+diff --git a/crates/horizon-client/src/game/ime.rs b/crates/horizon-client/src/game/ime.rs
+index f3109ef93..83d426823 100644
+--- a/crates/horizon-client/src/game/ime.rs
++++ b/crates/horizon-client/src/game/ime.rs
+@@ -45,6 +45,8 @@ impl Game<'_> {
+     /// Allow the input method only while a text box has focus.
+     pub(super) fn sync_ime(&mut self) {
+         let want = self.text_field_focused();
++        #[cfg(target_os = "android")]
++        let want = want && super::android_ime_allowed();
+         if want != self.ime_allowed
+             && let Some(window) = &self.window
+         {
+@@ -74,6 +76,8 @@ impl Game<'_> {
+     /// (`TextInputManager.setTextInputArea`, in window pixels).
+     pub(super) fn flush_ime(&mut self, hud: &mut HudBatch) {
+         preedit::draw_overlay(hud, &self.gui.atlas);
++        #[cfg(target_os = "android")]
++        self.draw_android_touch_controls(hud);
+         let Some([x0, y0, x1, y1]) = preedit::take_text_input_area() else {
+             return;
+         };
+diff --git a/crates/horizon-client/src/game/no_resources.rs b/crates/horizon-client/src/game/no_resources.rs
+index 12e1cf5b0..c3ef8e593 100644
+--- a/crates/horizon-client/src/game/no_resources.rs
++++ b/crates/horizon-client/src/game/no_resources.rs
+@@ -32,7 +32,7 @@ pub(super) fn show(looked_in: &std::path::Path, settings: &Settings) -> Result<(
+         error: None,
+     };
+     horizon_client::hud::GUI_SCALE.store(settings.gui_scale, Ordering::Relaxed);
+-    EventLoop::new()?.run_app(&mut app)?;
++    super::android_new_event_loop()?.run_app(&mut app)?;
+     app.error.map_or(Ok(()), Err)
+ }
+ 
+diff --git a/crates/horizon-client/src/game/split.rs b/crates/horizon-client/src/game/split.rs
+index 5a9682e99..9d7f537cd 100644
+--- a/crates/horizon-client/src/game/split.rs
++++ b/crates/horizon-client/src/game/split.rs
+@@ -595,6 +595,10 @@ impl<'a> Split<'a> {
+ }
+ 
+ impl ApplicationHandler for Split<'_> {
++    fn suspended(&mut self, event_loop: &ActiveEventLoop) {
++        self.host.suspended(event_loop);
++    }
++
+     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+         self.host.resumed(event_loop);
+         if !self.surfaces.is_empty() {
+diff --git a/launcher/src/lib.rs b/launcher/src/lib.rs
+index 4ad7fcd5d..8efd75a0b 100644
+--- a/launcher/src/lib.rs
++++ b/launcher/src/lib.rs
+@@ -8,7 +8,7 @@ pub mod datapacks;
+ pub mod desktop;
+ pub mod desktop_seams;
+ pub mod export;
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "android")))]
+ pub mod game_app;
+ pub mod game_log;
+ pub mod github;

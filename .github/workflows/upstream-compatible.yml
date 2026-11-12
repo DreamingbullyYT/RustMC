@@ -1,0 +1,241 @@
+name: Find latest Android-compatible upstream commit
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  push:
+    paths:
+      - ".github/workflows/upstream-compatible.yml"
+      - "android/UPSTREAM_PIN"
+      - "android/STABLE_ANDROID_PIN"
+      - "android/android.patch"
+      - "android/android-next.patch"
+      - "android/apply-next-overlay.py"
+      - "android/apply-legacy-overlay.py"
+      - "android/sync.sh"
+      - "android/overlay/**"
+  workflow_dispatch:
+    inputs:
+      max_commits:
+        description: "Maximum newest upstream main commits to test, newest first"
+        required: false
+        default: "12"
+
+permissions:
+  contents: write
+  actions: write   # lets the last step start the normal Android build after the pin moves
+
+concurrency:
+  group: upstream-compatible
+  cancel-in-progress: true
+
+jobs:
+  find:
+    name: Find newest compatible upstream commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      MAX_COMMITS: ${{ inputs.max_commits || '12' }}
+      NDK_VERSION: "26.3.11579264"
+      GRADLE_VERSION: "8.7"
+      RUST_TARGET: aarch64-linux-android
+    steps:
+      - name: Check out fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
+
+      - name: Install Android NDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.RUST_TARGET }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache Rust/Gradle data
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: compat-${{ runner.os }}-${{ hashFiles('core/Cargo.lock', 'android/UPSTREAM_PIN') }}
+          restore-keys: |
+            compat-${{ runner.os }}-
+
+      - name: Fetch upstream history
+        run: |
+          git clone -q --filter=blob:none https://github.com/horizon-rust/horizon.git .horizon-candidates
+          if [[ "$(git -C .horizon-candidates rev-parse --is-shallow-repository)" == "true" ]]; then
+            git -C .horizon-candidates fetch -q --unshallow origin
+          fi
+          git -C .horizon-candidates fetch -q --tags -f origin
+          # Three-way apply needs the old source blob named by android.patch's index line.
+          # The history clone is blob-filtered, so explicitly hydrate the known-good base tree.
+          known_good="$(tr -d '[:space:]' < android/UPSTREAM_PIN)"
+          git -C .horizon-candidates fetch -q --no-filter origin "$known_good"
+          # Track upstream main's newest commits, not Nightly or release tags (tags are still fetched so an
+          # older pin that came from a Nightly stays checkout-able).
+          upstream_head="$(git -C .horizon-candidates rev-parse origin/HEAD)"
+          echo "UPSTREAM_HEAD=$upstream_head" >> "$GITHUB_ENV"
+          echo "Newest upstream main commit: $upstream_head"
+
+      - name: Test newest compatible commits
+        id: find
+        shell: bash
+        run: |
+          set -uo pipefail
+          known_good="$(tr -d '[:space:]' < android/UPSTREAM_PIN)"
+          head="$UPSTREAM_HEAD"
+          max="$MAX_COMMITS"
+
+          echo "Known-good Android pin: $known_good"
+          echo "Upstream main:          $head"
+
+          # Test upstream main's newest commits first and stop at the known-good pin. If the pin is not on
+          # main's history, the newest $max commits are tested and the first green one becomes the pin.
+          candidates=()
+          while read -r sha; do
+            [ -n "$sha" ] || continue
+            [ "$sha" = "$known_good" ] && break
+            candidates+=("$sha")
+          done < <(git -C .horizon-candidates rev-list --first-parent -n "$max" origin/HEAD)
+
+          if [ "${#candidates[@]}" -eq 0 ]; then
+            echo "No newer upstream commits need testing."
+            echo "good=$known_good" >> "$GITHUB_OUTPUT"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mkdir -p .compat-work
+
+          for sha in "${candidates[@]}"; do
+            echo "============================================================"
+            echo "Testing candidate $sha"
+            echo "============================================================"
+
+            # The patch index hashes now name the pinned source blobs, so three-way apply can rebase edits.
+            rm -rf horizon .compat-work/candidate
+            git -C .horizon-candidates reset -q --hard
+            git -C .horizon-candidates clean -fdq
+            git -C .horizon-candidates checkout -q -f "$known_good"
+            git -C .horizon-candidates checkout -q -f "$sha"
+            git -C .horizon-candidates config core.fileMode false
+
+            # Each tested candidate is newer than UPSTREAM_PIN; use the rebased
+            # shared patch and select an adapter for its game.rs layout.
+            android_patch="$GITHUB_WORKSPACE/android/android-next.patch"
+            if [ -f .horizon-candidates/crates/horizon-client/src/game/window_handler.rs ]; then
+              android_layout=modules
+            else
+              android_layout=legacy
+            fi
+            if ! git -C .horizon-candidates apply --3way --whitespace=nowarn "$android_patch"; then
+              echo "PATCH_FAIL $sha"
+              echo "=== conflicted Android patch files ==="
+              git -C .horizon-candidates diff --name-only --diff-filter=U || true
+              for conflicted in $(git -C .horizon-candidates diff --name-only --diff-filter=U); do
+                echo "=== conflict details: $conflicted ==="
+                git -C .horizon-candidates diff --cc -- "$conflicted" | head -n 260 || true
+                for stage in 1 2 3; do
+                  echo "=== conflict stage $stage: $conflicted ==="
+                  git -C .horizon-candidates show ":$stage:$conflicted" 2>/dev/null | grep -n -A 55 -B 8 -E "impl ApplicationHandler for Game|fn resumed\(|fn window_event\(" | head -n 220 || true
+                done
+                echo "=== working file conflict markers: $conflicted ==="
+                grep -n -A 55 -B 8 -E '^(<<<<<<<|=======|>>>>>>>)' ".horizon-candidates/$conflicted" | head -n 220 || true
+              done
+              continue
+            fi
+            cp -a "$GITHUB_WORKSPACE/android/overlay/." .horizon-candidates/
+            if [ "$android_layout" = modules ]; then
+              python3 "$GITHUB_WORKSPACE/android/apply-next-overlay.py" .horizon-candidates
+            else
+              python3 "$GITHUB_WORKSPACE/android/apply-legacy-overlay.py" .horizon-candidates
+            fi
+            mkdir -p horizon
+            (cd .horizon-candidates && tar --exclude=.git -cf - .) | tar -x -C horizon
+
+            printf '%s\n' "$sha" > android/.upstream-built
+
+            # Generate the same engine data used by the normal Android build. This catches
+            # upstream changes that compile but make the Android preparation pipeline fail.
+            if ! (cd horizon && python tools/android_prepare.py && python tools/android_engine_data.py); then
+              echo "ENGINE_DATA_FAIL $sha"
+              continue
+            fi
+            rm -rf horizon/.local/android/minecraft horizon/.local/android/jdk horizon/.local/horizon-client
+
+            # The real compatibility gate: our Android patch + upstream engine + Android build.
+            if gradle assembleDebug --stacktrace --no-daemon; then
+              echo "BUILD_OK $sha"
+              echo "good=$sha" >> "$GITHUB_OUTPUT"
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            echo "BUILD_FAIL $sha"
+          done
+
+          echo "No compatible upstream commit found in the tested window." >&2
+          exit 2
+
+      - name: Update pin only after a successful compatibility build
+        if: ${{ steps.find.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          good="${{ steps.find.outputs.good }}"
+          printf '%s\n' "$good" > android/UPSTREAM_PIN
+          # the phone builds from the copy bundled in the APK, so it must move with the pin
+          cp android/UPSTREAM_PIN app/src/main/assets/hnmod/android/UPSTREAM_PIN
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android/UPSTREAM_PIN app/src/main/assets/hnmod/android/UPSTREAM_PIN
+          git commit -m "chore: advance Android upstream pin to $good"
+          git push
+          # Pushes made with GITHUB_TOKEN do not start other workflows, so start the build explicitly.
+          gh workflow run android.yml --ref "${{ github.ref_name }}"
+
+      - name: Compatibility summary
+        if: always()
+        run: |
+          {
+            echo "## Android upstream compatibility"
+            echo ""
+            echo "- Newest upstream main commit: \`$UPSTREAM_HEAD\`"
+            echo "- Previous known-good pin: \`$(git show HEAD:android/UPSTREAM_PIN | tr -d '[:space:]')\`"
+            if [ -n "${{ steps.find.outputs.good || '' }}" ]; then
+              echo "- Selected compatible commit: \`${{ steps.find.outputs.good }}\`"
+              echo "- Changed pin: \`${{ steps.find.outputs.changed || 'false' }}\`"
+            else
+              echo "- Result: no compatible newer commit found in the tested window"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

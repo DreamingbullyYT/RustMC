@@ -1,0 +1,183 @@
+name: HNMod core tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "hnmod-core/**"
+      - "android/termux/**"
+      - "android/android.patch"
+      - "android/overlay/**"
+      - "app/src/main/assets/hnmod/android/**"
+      - "app/src/main/java/dev/horizon/launcher/data/**"
+      - "app/src/main/java/dev/horizon/launcher/MainActivity.kt"
+      - "app/src/main/java/dev/horizon/launcher/ui/**"
+      - ".github/workflows/hnmod-core.yml"
+  pull_request:
+    paths:
+      - "hnmod-core/**"
+      - "android/android.patch"
+      - "android/overlay/**"
+      - "app/src/main/assets/hnmod/android/**"
+      - "app/src/main/java/dev/horizon/launcher/data/**"
+      - "app/src/main/java/dev/horizon/launcher/MainActivity.kt"
+      - ".github/workflows/hnmod-core.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run unit tests and compile CLI
+        run: cargo test --locked --manifest-path hnmod-core/Cargo.toml --all-targets
+      - name: Check Termux compiler shell syntax
+        run: bash -n android/termux/build-with-mods.sh
+      - name: Verify Git fetch self-repair for pinned revisions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          script = Path("android/termux/build-with-mods.sh").read_text()
+          assert "git_fetch_revision()" in script
+          assert 'git -C "$repo" config core.commitGraph false' in script
+          assert 'rm -f "$repo/.git/objects/info/commit-graph"' in script
+          assert 'rm -rf "$repo/.git/objects/info/commit-graphs"' in script
+          assert "fetch -q --refetch --filter=blob:none origin" in script
+          assert "pack.threads=1" in script
+          assert "index.threads=1" in script
+          assert "restore_github_snapshot()" in script
+          assert 'restore_github_snapshot "$src" "$ref" "horizon-rust/horizon"' in script
+          assert 'prepare_engine "$STABLE_PIN"' in script, "newest pin that cannot be patched must fall back to the stable pin"
+          assert 'restore_github_snapshot "$SRC" "$BEST_PIN" "horizon-rust/horizon"' in script
+          assert 'git clone -q --filter=blob:none --no-checkout' in script
+          assert 'git -C "$SRC" reset --hard' not in script
+          assert 'git -C "$SRC" checkout' not in script
+          assert 'git_fetch_revision "$src" "$ref"' in script
+          assert 'core.createObject=rename' in script, "Git under PRoot --link2symlink needs rename-based object creation"
+          assert Path("android/UPSTREAM_PIN").read_text() == Path("app/src/main/assets/hnmod/android/UPSTREAM_PIN").read_text(), "the phone builds from the bundled pin"
+          assert 'git_fetch_revision "$SRC" "$candidate"' in script
+          assert 'git_fetch_revision "$MIXIN_REPO" "$candidate"' in script
+          asset = Path("app/src/main/assets/hnmod/android/termux/build-with-mods.sh").read_text()
+          assert asset == script, "embedded compiler script must match its source"
+          PY
+      - name: Verify Cargo registry fallback is scoped and used for all build stages
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          script = Path("android/termux/build-with-mods.sh").read_text()
+          assert "CARGO_MIRROR_CONFIG=(" in script
+          assert "sparse+https://rsproxy.cn/index/" in script
+          assert "CARGO_USE_MIRROR=1" in script
+          assert 'cargo "${CARGO_MIRROR_CONFIG[@]}" "$@"' in script
+          cli_start = script.index("  hnmod_cli() {")
+          cli_end = script.index("\n  PINS=()", cli_start)
+          cli_block = script[cli_start:cli_end]
+          assert "local CARGO_INCREMENTAL=0" in cli_block
+          assert "export CARGO_INCREMENTAL" in cli_block
+          assert "export CARGO_INCREMENTAL=0" not in script, "validator setting must not leak into the game build"
+          assert '"${HNMOD_CLI[@]}"' not in script, "all validator calls must use the scoped helper"
+          incremental_pos = script.index("  export CARGO_INCREMENTAL=1")
+          build_pos = script.index('cargo_retry build --locked --manifest-path "$STAGE/Cargo.toml"')
+          assert incremental_pos < build_pos, "the native game build must enable Cargo incremental compilation"
+          assert "cargo_retry install --locked --path" in script
+          assert "cargo_retry fetch --manifest-path" in script
+          fetch_pos = script.index('cargo_retry fetch --manifest-path "$SRC/Cargo.toml"')
+          baseline_pos = script.index('cp "$SRC/Cargo.lock" "$WORK/horizon-pinned-Cargo.lock"')
+          stage_metadata_pos = script.index('cargo metadata --offline --format-version 1 --manifest-path "$STAGE/Cargo.toml"')
+          assert fetch_pos < baseline_pos < stage_metadata_pos, "baseline lock must include Android workspace deps but not staged mod deps"
+          assert "cargo_retry fetch --locked --manifest-path" not in script
+          assert 'cargo_retry build --locked --manifest-path "$STAGE/Cargo.toml"' in script
+          assert "nice -n 10 cargo_retry" not in script, "Bash functions must not be invoked through nice(1)"
+          assert 'cargo install --locked --path' not in script
+          embedded = Path("app/src/main/assets/hnmod/android/termux/build-with-mods.sh").read_text()
+          assert embedded == script, "embedded compiler script must match its source"
+          PY
+      - name: Verify pinned mixins build uses a local checkout
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          script = Path("android/termux/build-with-mods.sh").read_text()
+          assert 'MIXIN_SOURCE="$WORK/mixins-src"' in script
+          assert 'git_fetch_revision "$MIXIN_SOURCE" "$REV"' in script
+          assert 'restore_github_snapshot "$MIXIN_SOURCE" "$REV" "horizon-rust/horizon-mixins"' in script
+          assert 'git -C "$MIXIN_SOURCE" checkout' not in script
+          assert 'cargo_retry install --locked --path "$MIXIN_SOURCE/crates/horizon-mixins-cli" --root "$TOOL"' in script
+          assert 'cargo install --locked --git https://github.com/horizon-rust/horizon-mixins' not in script
+          asset = Path("app/src/main/assets/hnmod/android/termux/build-with-mods.sh").read_text()
+          assert asset == script, "embedded compiler script must match its source"
+          PY
+      - name: Verify HNMod data is imported before post-build
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          script = Path("android/termux/build-with-mods.sh").read_text()
+          copy = script.index('rsync -a "$STAGE/native-data/" "$OUT/native-data/"')
+          post = script.index("# ---- 6. PC-compatible post-build programs")
+          assert copy < post, "bundle data must be copied into the game version before post-build"
+          assert 'HORIZON_NATIVE_DATA_DIR' in script
+          assert 'HORIZON_NATIVE_BUNDLE_DATA_DIR' in script
+          PY
+      - name: Verify Android game bridge is a separate Rust module
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          patch = Path("android/android.patch").read_text()
+          embedded_patch = Path("app/src/main/assets/hnmod/android/android.patch").read_text()
+          assert patch == embedded_patch, "embedded Android patch must match its source"
+          assert '+mod android;' in patch
+          assert 'include!("game/android.rs")' not in patch, "do not put include! in game.rs: it makes every game target unsupported to horizon-mixins"
+          assert 'use android::new_event_loop as android_new_event_loop;' in patch
+          assert '+    android_touch: android::AndroidTouchState,' in patch
+          source = Path("android/overlay/crates/horizon-client/src/game/android.rs").read_text()
+          embedded = Path("app/src/main/assets/hnmod/android/overlay/crates/horizon-client/src/game/android.rs").read_text()
+          assert source == embedded, "embedded Android game bridge must match its source"
+          assert 'use super::*;' in source
+          assert 'pub(super) struct AndroidTouchState' in source
+          assert 'pub(super) auto_jump: bool' in source
+          for symbol in (
+              'pub(super) fn draw_android_touch_controls',
+              'pub(super) fn android_poll_input',
+              'pub(super) fn android_touch_look',
+              'pub(super) fn android_intercept',
+              'pub(super) fn android_publish_stats',
+              'pub(super) fn new_event_loop',
+              'pub(super) fn android_surface_suspended',
+              'pub(super) fn android_surface_resumed',
+          ):
+              assert symbol in source, f"parent game module needs access to {symbol}"
+          PY
+
+      - name: Verify HNMod live log is streamed and visible during compilation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          runner = Path("app/src/main/java/dev/horizon/launcher/data/EmbeddedProcessRunner.kt").read_text()
+          adapter = Path("app/src/main/java/dev/horizon/launcher/data/HnmodBuildAdapter.kt").read_text()
+          toolchain = Path("app/src/main/java/dev/horizon/launcher/data/EmbeddedToolchain.kt").read_text()
+          activity = Path("app/src/main/java/dev/horizon/launcher/MainActivity.kt").read_text()
+          ui = Path("app/src/main/java/dev/horizon/launcher/ui/HorizonLauncherUi.kt").read_text()
+          assert "writer.flush()" in runner and "onLine(line)" in runner
+          assert "onLine: (String) -> Unit = {}" in runner
+          assert "HnmodBuildLog.begin(activity)" in toolchain
+          assert "onLine = onLogLine" in toolchain
+          assert '"termux-install-build-packages", onLine = onLogLine' in toolchain
+          assert '"toolchain-smoke-test", onLine = onLogLine' in toolchain
+          assert "HnmodBuildLog.finish(activity)" in toolchain
+          assert "onLine = onLogLine" in adapter
+          assert "Live build log" in ui and "onBuildLog" in ui
+          assert "onShowBuildLog = { showLiveHnmodLog() }" in activity
+          assert "showLiveHnmodLog()" in activity
+          assert "delay(500)" in activity
+          PY
+      - name: Test engine compatibility metadata extraction
+        shell: bash
+        run: |
+          hooks=$(printf '%s\n' 'pub(crate) const NATIVE_HOOKS_API: u32 = 2;' | sed -n 's/^pub(crate) const NATIVE_HOOKS_API: u32 = \([0-9]*\);.*/\1/p')
+          mixins=$(printf '%s\n' 'pub const MIXINS_REV: &str = "abcdef012345";' | sed -n 's/^pub const MIXINS_REV: &str = "\([0-9a-f]*\)";.*/\1/p')
+          test "$hooks" = "2"
+          test "$mixins" = "abcdef012345"

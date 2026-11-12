@@ -1,0 +1,11 @@
+[package]
+name = "my_plugin"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Same Horizon commit as the loader (build-plugin.sh points this at the game source it builds against).
+horizon-client = { git = "https://github.com/horizon-rust/horizon", rev = "41f822b659789780f58d32c63ddfb6887ea1b8bf", default-features = false }

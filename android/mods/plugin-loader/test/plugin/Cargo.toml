@@ -1,0 +1,11 @@
+[package]
+name = "test_plugin"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+horizon-client = { git = "https://github.com/horizon-rust/horizon", rev = "41f822b659789780f58d32c63ddfb6887ea1b8bf", default-features = false }

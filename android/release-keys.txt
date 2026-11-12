@@ -1,0 +1,5 @@
+# Public Ed25519 keys the Android edition's nightly releases are signed with (same format as
+# horizon's crates/horizon-release-sign/release-keys.txt): one base64 key per line. The app builds
+# this file in and refuses any download that none of these keys signed. The private key is the
+# ANDROID_RELEASE_SIGNING_KEY secret of this repository (PKCS#8, base64).
+Jq2QI6yo98/VZCZk3PcONuFFuLwqWesXTtGi/T0rBTo=

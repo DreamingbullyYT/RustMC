@@ -1,17 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
     <uses-permission android:name="android.permission.INTERNET" />
-    <queries><package android:name="dev.horizon.android" /></queries>
-    <application android:label="@string/app_name" android:allowBackup="false" android:theme="@android:style/Theme.Material.NoActionBar">
-        <provider android:name=".FerriteDocumentsProvider" android:authorities="${applicationId}.documents" android:exported="true"
-            android:grantUriPermissions="true" android:permission="android.permission.MANAGE_DOCUMENTS">
-            <intent-filter><action android:name="android.content.action.DOCUMENTS_PROVIDER" /></intent-filter>
-        </provider>
-        <activity android:name=".MainActivity" android:exported="true">
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_launcher_horizon"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Horizon"
+        android:usesCleartextTraffic="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Horizon">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+
+
+        <activity
+            android:name=".game.TouchControlEditorActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:exported="false"
+            android:label="Horizon Controls"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.Horizon.Controls" />
+
+        <activity
+            android:name=".game.HorizonGameActivity"
+            android:process=":game"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:exported="false"
+            android:label="Horizon Game"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar.Fullscreen">
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="horizon_core" />
+        </activity>
+        <service
+            android:name=".data.HnmodBuildService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the on-device HNMod compiler running while the app is in the background" />
+        </service>
+        <service
+            android:name=".game.GameKeepAliveService"
+            android:process=":game"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the running game alive while the app is in the background" />
+        </service>
     </application>
+
 </manifest>

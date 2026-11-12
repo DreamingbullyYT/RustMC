@@ -1,0 +1,11 @@
+# Plugin loader: a native trait mod that loads horizon-plugins/*.so and forwards every Hooks and
+# RenderHooks call to them, so plugins reach the whole hook API without rebuilding the engine.
+[mod]
+id = "plugin_loader"
+version = "0.1.0"
+
+[compatibility]
+horizon_revision = "41f822b659789780f58d32c63ddfb6887ea1b8bf"
+
+[api]
+path = "api"

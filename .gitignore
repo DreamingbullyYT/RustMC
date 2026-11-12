@@ -1,4 +1,8 @@
-build/
-.gradle/
-local.properties
-*.apk
+/horizon/
+/.horizon-sync/
+/core/target/
+/android/.upstream-built
+
+# Native libraries are built into app/build/generated/jniLibs, never committed
+app/src/main/jniLibs/
+/hnmod-core/target/

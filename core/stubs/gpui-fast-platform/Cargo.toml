@@ -1,0 +1,10 @@
+[package]
+name = "gpui-fast-platform"
+version = "0.1.999"
+edition = "2021"
+publish = false
+
+[features]
+wayland = []
+x11 = []
+font-kit = []

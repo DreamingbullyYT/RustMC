@@ -1,0 +1,5 @@
+[package]
+name = "trash"
+version = "5.999.0"
+edition = "2021"
+publish = false

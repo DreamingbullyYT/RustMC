@@ -1,0 +1,20 @@
+[package]
+name = "horizon-android-auth"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "horizon_msa"
+crate-type = ["cdylib"]
+
+[dependencies]
+horizon-launcher = { path = "../horizon/launcher" }
+jni = "0.21"
+serde_json = "1"
+
+# The launcher asks for desktop-only crates (GUI, system trash); see ../core/stubs/README.md.
+[patch.crates-io]
+gpui-fast = { path = "../core/stubs/gpui-fast" }
+gpui-fast-platform = { path = "../core/stubs/gpui-fast-platform" }
+trash = { path = "../core/stubs/trash" }

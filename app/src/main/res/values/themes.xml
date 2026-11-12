@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Horizon" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/horizon_page</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+    <style name="Theme.Horizon.Controls" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#5266E8</item>
+        <item name="colorPrimaryVariant">#27378F</item>
+        <item name="colorSecondary">#8CD7E7</item>
+        <item name="android:windowBackground">#11131B</item>
+        <item name="android:statusBarColor">#11131B</item>
+        <item name="android:navigationBarColor">#11131B</item>
+    </style>
+</resources>

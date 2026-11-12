@@ -1,0 +1,38 @@
+[package]
+name = "horizon-android-core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "horizon_core"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+audio = ["horizon-android-installer/audio"]
+
+[dependencies]
+horizon-launcher = { path = "../horizon/launcher" }
+horizon-telemetry = { path = "../horizon/crates/horizon-telemetry" }
+horizon-android-installer = { path = "../horizon/crates/horizon-android-installer" }
+horizon-release-sign = { path = "../horizon/crates/horizon-release-sign" }
+horizon-mods = { path = "../horizon/crates/horizon-mods" }
+horizon-shader-api = { path = "../horizon/crates/horizon-shader-api" }
+horizon-shaders = { path = "../horizon/crates/horizon-shaders" }
+jni = "0.21"
+ureq = { version = "2", features = ["json", "tls"], default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+android_logger = "0.14"
+
+# The launcher asks for desktop-only crates (GUI, system trash); see stubs/README.md.
+[patch.crates-io]
+gpui-fast = { path = "stubs/gpui-fast" }
+gpui-fast-platform = { path = "stubs/gpui-fast-platform" }
+trash = { path = "stubs/trash" }
+
+[profile.release]
+lto = "thin"
+strip = true
