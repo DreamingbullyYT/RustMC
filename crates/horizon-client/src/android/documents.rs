@@ -757,7 +757,7 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
             return Err("Import cancelled".into());
         }
         let meta =
-            horizon_client::touch::Settings::detect_and_import_preset(&request.home, &bytes, &name)?;
+            crate::touch::Settings::detect_and_import_preset(&request.home, &bytes, &name)?;
         notice(
             format!(
                 "Imported {} preset '{}' into {}/{}.json",
@@ -862,7 +862,7 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
                 on.disabled.remove(&mod_id);
                 on.enabled.insert(mod_id.clone());
                 if ext == "mrpack" {
-                    if let Ok((pack, rows, count)) = horizon_port_pack::android_port::port_modpack_natively(
+                    if let Ok((pack, rows, count)) = crate::android_port::port_modpack_natively(
                         &dest,
                         profile_root,
                         &|stage_msg, p| set_progress("Porting .mrpack Modpack...", stage_msg, Some(p)),
@@ -879,7 +879,7 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
                     }
                 }
                 if ext == "hpack" {
-                    if let Ok(count) = horizon_client::jar_transpiler::install_hpack_modpack(&dest, profile_root) {
+                    if let Ok(count) = crate::jar_transpiler::install_hpack_modpack(&dest, profile_root) {
                         imported(
                             format!("Installed Horizon Modpack '{mod_id}' ({count} mods enabled)!"),
                             Kind::Mods,
@@ -888,7 +888,7 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
                     }
                 }
                 if ext == "hnmod" {
-                    if let Ok(compiled) = horizon_client::jar_transpiler::compile_hnmod_bundle_realtime(&dest, profile_root) {
+                    if let Ok(compiled) = crate::jar_transpiler::compile_hnmod_bundle_realtime(&dest, profile_root) {
                         on.disabled.remove(&compiled.id);
                         on.enabled.insert(compiled.id.clone());
                         on.save(profile_root);
@@ -903,7 +903,7 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
                     }
                 }
                 if ext == "jar"
-                    && let Ok(transpiled) = horizon_client::jar_transpiler::transpile_jar_to_horizon_mods(&dest, profile_root)
+                    && let Ok(transpiled) = crate::jar_transpiler::transpile_jar_to_horizon_mods(&dest, profile_root)
                 {
                     on.disabled.remove(&transpiled.id);
                     on.enabled.insert(transpiled.id.clone());
@@ -1061,7 +1061,7 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
                 on.disabled.remove(&mod_id);
                 on.enabled.insert(mod_id.clone());
                 if ext == "mrpack"
-                    && let Ok((pack, rows, count)) = horizon_port_pack::android_port::port_modpack_natively(
+                    && let Ok((pack, rows, count)) = crate::android_port::port_modpack_natively(
                         &target,
                         &request.home,
                         &|stage_msg, p| set_progress("Porting .mrpack Modpack...", stage_msg, Some(p)),
@@ -1073,13 +1073,13 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
                         rows.len()
                     ));
                 } else if ext == "hpack"
-                    && let Ok(count) = horizon_client::jar_transpiler::install_hpack_modpack(&target, &request.home)
+                    && let Ok(count) = crate::jar_transpiler::install_hpack_modpack(&target, &request.home)
                 {
                     transpiled_msg = Some(format!(
                         "Installed Horizon Modpack '{mod_id}' ({count} mods enabled) — ready in game!"
                     ));
                 } else if ext == "hnmod"
-                    && let Ok(compiled) = horizon_client::jar_transpiler::compile_hnmod_bundle_realtime(&target, &request.home)
+                    && let Ok(compiled) = crate::jar_transpiler::compile_hnmod_bundle_realtime(&target, &request.home)
                 {
                     on.disabled.remove(&compiled.id);
                     on.enabled.insert(compiled.id.clone());
@@ -1088,7 +1088,7 @@ fn stage(request: Request, mut input: std::fs::File, name: String) -> Result<()>
                         compiled.title, compiled.id
                     ));
                 } else if ext == "jar"
-                    && let Ok(transpiled) = horizon_client::jar_transpiler::transpile_jar_to_horizon_mods(&target, &request.home)
+                    && let Ok(transpiled) = crate::jar_transpiler::transpile_jar_to_horizon_mods(&target, &request.home)
                 {
                     on.disabled.remove(&transpiled.id);
                     on.enabled.insert(transpiled.id.clone());
@@ -1200,9 +1200,9 @@ pub fn resolve(choice: Choice) {
             on.disabled.remove(mod_id);
             on.enabled.insert(mod_id.to_owned());
             if fname.ends_with(".hnmod") {
-                let _ = horizon_client::jar_transpiler::compile_hnmod_bundle_realtime(&c.target, profile_root);
+                let _ = crate::jar_transpiler::compile_hnmod_bundle_realtime(&c.target, profile_root);
             } else if fname.ends_with(".jar")
-                && let Ok(transpiled) = horizon_client::jar_transpiler::transpile_jar_to_horizon_mods(&c.target, profile_root)
+                && let Ok(transpiled) = crate::jar_transpiler::transpile_jar_to_horizon_mods(&c.target, profile_root)
             {
                 on.disabled.remove(&transpiled.id);
                 on.enabled.insert(transpiled.id);
@@ -1346,7 +1346,7 @@ pub fn draw_ui(ui: &mut Ui<'_>) {
         let pb_x = x + 18.0;
         let pb_y = y + 80.0;
         let pb_w = w - 36.0;
-        let elapsed = horizon_client::ui_theme::motion::ambient_time();
+        let elapsed = crate::android_ui_theme::motion::ambient_time();
         let fill_ratio = s
             .progress
             .unwrap_or_else(|| ((elapsed * 0.45).sin().abs() * 0.55 + 0.35).clamp(0.15, 0.95));
