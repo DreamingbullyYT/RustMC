@@ -53,12 +53,12 @@ pub(crate) fn start(
     let previous = std::env::current_dir()?;
     std::env::set_current_dir(&request.game_home)?;
     if request.open_gl {
-        horizon_client::android_runtime::configure_graphics(true);
+        crate::android_runtime::configure_graphics(true);
     } else {
-        horizon_client::android_runtime::configure_graphics(false);
-        horizon_client::android_runtime::set_prefer_vulkan(true);
+        crate::android_runtime::configure_graphics(false);
+        crate::android_runtime::set_prefer_vulkan(true);
     }
-    horizon_client::android_runtime::configure_gpu(request.gpu_batching);
+    crate::android_runtime::configure_gpu(request.gpu_batching);
     crate::android_game::android_reset_bundled_mods();
     let result = crate::android_game::android_game(request.arguments());
     if result.is_err() {
