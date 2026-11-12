@@ -230,10 +230,7 @@ fn init_logging() {
 #[unsafe(no_mangle)]
 fn android_main(app: AndroidApp) {
     init_logging();
-    if let Err(error) = horizon_client::entry::initialize_for_hosted_application(Default::default()) {
-        log::error!("Horizon engine initialization failed: {error}");
-        return;
-    }
+    horizon_client::entry::initialize_for_hosted_application(Default::default());
     use winit::platform::android::activity::input::Axis;
     for axis in [
         Axis::Vscroll,
