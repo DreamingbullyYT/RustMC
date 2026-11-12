@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
+import dev.horizon.launcher.ui.screens.FileManagerScreen
 import dev.horizon.launcher.ui.screens.HomeScreen
 import dev.horizon.launcher.ui.screens.PlaceholderScreen
 import dev.horizon.launcher.ui.theme.HorizonColors
@@ -31,7 +32,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun HorizonApp() {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Home", "Instances", "Mods", "Settings")
+    val tabs = listOf("Home", "Instances", "Mods", "Files", "Settings")
+    val icons = listOf("⌂", "▦", "◇", "▤", "⚙")
     HorizonTheme {
         Scaffold(
             containerColor = HorizonColors.Background,
@@ -43,7 +45,7 @@ private fun HorizonApp() {
                             onClick = { selectedTab = index },
                             icon = {
                                 Text(
-                                    listOf("⌂", "▦", "◇", "⚙")[index],
+                                    icons[index],
                                     fontSize = 19.sp,
                                     color = if (selectedTab == index) HorizonColors.Accent else Color.Gray
                                 )
@@ -58,6 +60,7 @@ private fun HorizonApp() {
                 0 -> HomeScreen(Modifier.padding(insets))
                 1 -> PlaceholderScreen("Instances", "Separate Minecraft profiles, versions and game directories.", Modifier.padding(insets))
                 2 -> PlaceholderScreen("Mods & shaders", "HNMod, HMod and HShader will have separate compatibility and install flows.", Modifier.padding(insets))
+                3 -> FileManagerScreen(Modifier.padding(insets))
                 else -> PlaceholderScreen("Settings", "Renderer, controls, storage, performance and toolchain settings.", Modifier.padding(insets))
             }
         }
