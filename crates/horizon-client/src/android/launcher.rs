@@ -309,7 +309,7 @@ impl Launcher {
             self.catalog.config.screen.immersive,
             self.catalog.config.screen.avoid_cutout,
         );
-        winit::platform::android::set_native_content_aspect(
+        crate::display::set_native_content_aspect(
             self.catalog.config.screen.aspect.ratio(),
         );
     }
@@ -330,18 +330,19 @@ impl Launcher {
         crate::display::set_scale(self.catalog.config.render_scale);
         crate::android_runtime::configure_gpu(false);
         if let (Some(renderer), Some(window)) = (&mut self.renderer, &self.window) {
-            if let Some(size) = crate::display::prepare(window)? {
-                renderer.resize(size[0], size[1]);
-            }
+            let desired_size = crate::display::prepare(window)?;
             renderer.recreate_surface()?;
-            let size = window.inner_size();
-            renderer.resize(size.width, size.height);
+            let size = desired_size.unwrap_or_else(|| {
+                let size = window.inner_size();
+                [size.width, size.height]
+            });
+            renderer.resize(size[0], size[1]);
             return Ok(());
         }
         let window = Arc::new(
             events.create_window(Window::default_attributes().with_title("Horizon Android"))?,
         );
-        crate::display::prepare(&window)?;
+        let initial_render_size = crate::display::prepare(&window)?;
         let vanilla_dir = self
             .home
             .join(".local/horizon-client")
@@ -374,6 +375,9 @@ impl Launcher {
             None,
             api,
         )?;
+        if let Some(size) = initial_render_size {
+            renderer.resize(size[0], size[1]);
+        }
         let uncapped = self.catalog.config.max_fps_mode && !self.catalog.config.battery_perf_mode;
         renderer.set_present_mode(
             !uncapped,
@@ -709,7 +713,7 @@ impl ApplicationHandler for Launcher {
         }
         self.drag = None;
         if let Some(renderer) = &mut self.renderer {
-            renderer.suspend_surface();
+            renderer.suspended = true;
         }
     }
     fn window_event(&mut self, events: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
@@ -825,7 +829,7 @@ impl ApplicationHandler for Launcher {
             game.device_event(events, id, event);
         } else {
             crate::android_runtime::gamepad_event(
-                winit::platform::android::native_device_id(id),
+                crate::android_runtime::native_device_id(id),
                 &event,
             );
         }
