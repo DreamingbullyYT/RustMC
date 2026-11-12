@@ -175,6 +175,7 @@ fun HorizonLauncherUi(
         MaterialTheme(colorScheme = scheme) {
         var page by remember { mutableStateOf(AtlasPage.HOME) }
         Box(Modifier.fillMaxSize().background(CanvasPaper).statusBarsPadding()) {
+        AuroraBackground()
         Column(Modifier.fillMaxSize()) {
         AtlasHeader(playerName = playerName, ready = minecraftReady, onRefresh = onRefresh)
         Row(
