@@ -82,7 +82,7 @@ impl Launcher {
         );
     }
 
-    fn edit_text(&mut self, output: horizon_client::osk::Output) {
+    fn edit_text(&mut self, output: crate::android_osk::Output) {
         if let Some(tc) = &mut self.control_editor
             && crate::touch_ui::apply_editor_or_preset_output(
                 tc.editor.as_mut(),
@@ -100,7 +100,7 @@ impl Launcher {
         if self.login.edit(self.catalog.editing, &output) {
             if matches!(
                 output,
-                horizon_client::osk::Output::Enter | horizon_client::osk::Output::Close
+                crate::android_osk::Output::Enter | crate::android_osk::Output::Close
             ) {
                 self.catalog.editing = None;
                 crate::platform::hide();
@@ -810,7 +810,7 @@ impl ApplicationHandler for Launcher {
                 }
             }
             WindowEvent::Ime(winit::event::Ime::Commit(text)) => {
-                self.edit_text(horizon_client::osk::Output::Text(text));
+                self.edit_text(crate::android_osk::Output::Text(text));
                 Ok(())
             }
             _ => Ok(()),
@@ -889,7 +889,7 @@ impl ApplicationHandler for Launcher {
             crate::platform::show(&text);
         }
         for out in crate::platform::poll() {
-            if matches!(out, horizon_client::osk::Output::Enter) {
+            if matches!(out, crate::android_osk::Output::Enter) {
                 crate::platform::hide();
             }
             self.edit_text(out);
