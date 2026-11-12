@@ -1,10 +1,6 @@
 //! SAF selection, bounded background imports and explicit collision choices.
-use horizon_client::{
-    Result,
-    content_files::{self, Kind},
-    hud::{HudAtlas, HudBatch, rgba},
-    ui_theme::{Face, Ui, color},
-};
+use horizon_client::{Result, hud::{HudAtlas, HudBatch, rgba}};
+use crate::{content_files::{self, Kind}, android_ui_theme::{Face, Ui, color}};
 use jni::{
     JNIEnv,
     objects::{JObject, JString},
