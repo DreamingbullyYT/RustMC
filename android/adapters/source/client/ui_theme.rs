@@ -166,9 +166,9 @@ impl Fonts {
         );
         Self {
             faces: [
-                f(horizon_theme::fonts::GOOGLE_SANS_REGULAR),
-                f(horizon_theme::fonts::GOOGLE_SANS_MEDIUM),
-                f(horizon_theme::fonts::GOOGLE_SANS_SEMIBOLD),
+                f(horizon_theme::fonts::GEIST_REGULAR),
+                f(horizon_theme::fonts::GEIST_MEDIUM),
+                f(horizon_theme::fonts::GEIST_SEMIBOLD),
                 f(horizon_theme::fonts::GEIST_MONO),
             ],
         }
