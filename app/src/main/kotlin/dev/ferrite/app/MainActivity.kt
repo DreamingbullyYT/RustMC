@@ -4,7 +4,14 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -144,14 +151,99 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
+    private fun SliderRow(label: String, value: Double, range: ClosedFloatingPointRange<Double>, onChange: (Double) -> Unit) {
+        Column {
+            Text("$label: ${"%.2f".format(value)}", style = MaterialTheme.typography.bodyMedium)
+            Slider(value = value.toFloat(), onValueChange = { onChange(it.toDouble()) }, valueRange = range.start.toFloat()..range.endInclusive.toFloat())
+        }
+    }
+
+    @Composable
+    private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(label, Modifier.weight(1f)); Switch(checked = checked, onCheckedChange = onChange)
+        }
+    }
+
+    /** Quick settings and the control editor for the first instance; both edit the engine's `horizon-touch.json`. */
+    @Composable
     private fun ControlsTab() {
-        var layout by remember { mutableStateOf(TouchLayout.MCPE) }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TouchLayout.PRESETS.forEach { p -> FilterChip(selected = layout.name == p.name, onClick = { layout = p }, label = { Text(p.name) }) }
+        val inst = store.list().firstOrNull()
+        if (inst == null) { Text(stringResource(R.string.no_instances)); return }
+        val ts = remember(inst.id) { TouchSettings(File(store.gameDir(inst), TouchSettings.FILE)) }
+        var rev by remember { mutableIntStateOf(0) }
+        var mode by remember { mutableStateOf(TouchMode.CROSSHAIR) }
+        var selected by remember { mutableStateOf(TouchControl.JUMP) }
+        fun change(block: () -> Unit) { block(); ts.save(); rev++ }
+        @Suppress("UNUSED_EXPRESSION") rev
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { Text(stringResource(R.string.quick_settings), style = MaterialTheme.typography.titleMedium) }
+            item {
+                Text(stringResource(R.string.resolution, ts.resolutionPercent))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TouchSettings.RESOLUTION_CHIPS.forEach { p -> FilterChip(selected = ts.resolutionPercent == p, onClick = { change { ts.resolutionPercent = p } }, label = { Text("$p%") }) }
+                }
+                Slider(value = ts.resolutionPercent.toFloat(), onValueChange = { change { ts.resolutionPercent = it.toInt() } }, valueRange = 25f..100f)
             }
-            Text(stringResource(R.string.overlaps, layout.overlaps().size))
-            Text(layout.widgets.joinToString("\n") { "${it.id}: ${it.kind.name.lowercase()} (${"%.2f".format(it.x)}, ${"%.2f".format(it.y)})" }, style = MaterialTheme.typography.bodySmall)
+            item { SliderRow(stringResource(R.string.sensitivity), ts.sensitivity, 0.1..3.0) { v -> change { ts.sensitivity = v } } }
+            item { SwitchRow(stringResource(R.string.virtual_mouse), ts.virtualMouse) { v -> change { ts.virtualMouse = v } } }
+            item { SliderRow(stringResource(R.string.mouse_speed), ts.virtualMouseSpeed, 0.25..3.0) { v -> change { ts.virtualMouseSpeed = v } } }
+            item { SliderRow(stringResource(R.string.pointer_size), ts.pointerScale, 0.5..2.0) { v -> change { ts.pointerScale = v } } }
+            item { SliderRow(stringResource(R.string.button_size), ts.buttonScale, 0.5..2.0) { v -> change { ts.buttonScale = v } } }
+            item { SwitchRow(stringResource(R.string.animations), ts.gameAnimations) { v -> change { ts.gameAnimations = v } } }
+            item { SwitchRow(stringResource(R.string.vibrate), ts.vibrate) { v -> change { ts.vibrate = v } } }
+            item { SwitchRow(stringResource(R.string.invert_y), ts.invertY) { v -> change { ts.invertY = v } } }
+            item { SwitchRow(stringResource(R.string.left_handed), ts.leftHanded) { v -> change { ts.leftHanded = v } } }
+            item { SwitchRow(stringResource(R.string.sprint_toggle), ts.sprintToggle) { v -> change { ts.sprintToggle = v } } }
+            item { SwitchRow(stringResource(R.string.dynamic_joystick), ts.dynamicJoystick) { v -> change { ts.dynamicJoystick = v } } }
+            item { SwitchRow(stringResource(R.string.gyroscope), ts.gyroscope) { v -> change { ts.gyroscope = v } } }
+            item {
+                Text(stringResource(R.string.scheme))
+                Scheme.entries.forEach { s -> FilterChip(selected = ts.scheme == s, onClick = { change { ts.scheme = s } }, label = { Text(s.label) }) }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("Mcpe", "GoyControl").forEach { st -> FilterChip(selected = ts.controlStyle == st, onClick = { change { ts.controlStyle = st } }, label = { Text(st) }) }
+                }
+            }
+            item { Text(stringResource(R.string.control_editor), style = MaterialTheme.typography.titleMedium) }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TouchMode.entries.forEach { m -> FilterChip(selected = mode == m, onClick = { mode = m }, label = { Text(m.json) }) }
+                }
+            }
+            item {
+                BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                    val w = constraints.maxWidth.toFloat(); val h = constraints.maxHeight.toFloat()
+                    TouchControl.entries.forEach { c ->
+                        val p = ts.placement(mode, c); val side = (p.size * h)
+                        val hidden = ts.visibility(c) == HIDDEN
+                        Box(
+                            Modifier
+                                .offset { IntOffset((p.x * w - side / 2).toInt(), (p.y * h - side / 2).toInt()) }
+                                .size(with(LocalDensity.current) { side.toDp() })
+                                .background(if (c == selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary, RoundedCornerShape(8.dp))
+                                .alpha(if (hidden) 0.25f else p.opacity.toFloat().coerceAtLeast(0.3f))
+                                .pointerInput(c, mode) {
+                                    detectDragGestures(onDragStart = { selected = c }, onDragEnd = { ts.save() }) { change, drag ->
+                                        change.consume(); val q = ts.placement(mode, c)
+                                        ts.setPlacement(mode, c, q.copy(x = q.x + drag.x / w, y = q.y + drag.y / h)); rev++
+                                    }
+                                }
+                        ) { Text(c.label.take(2), Modifier.align(androidx.compose.ui.Alignment.Center), style = MaterialTheme.typography.labelSmall) }
+                    }
+                }
+            }
+            item {
+                val p = ts.placement(mode, selected)
+                Text(selected.label, style = MaterialTheme.typography.titleSmall)
+                SliderRow(stringResource(R.string.size), p.size, 0.045..0.45) { v -> change { ts.setPlacement(mode, selected, p.copy(size = v)) } }
+                SliderRow(stringResource(R.string.opacity), p.opacity, 0.0..1.0) { v -> change { ts.setPlacement(mode, selected, p.copy(opacity = v)) } }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(FOLLOW_SCHEME to R.string.vis_auto, SHOWN to R.string.vis_shown, HIDDEN to R.string.vis_hidden).forEach { (v, label) ->
+                        FilterChip(selected = ts.visibility(selected) == v, onClick = { change { ts.setVisibility(selected, v) } }, label = { Text(stringResource(label)) })
+                    }
+                }
+                OutlinedButton(onClick = { change { ts.resetPlacements(mode) } }) { Text(stringResource(R.string.reset_layout)) }
+            }
         }
     }
 

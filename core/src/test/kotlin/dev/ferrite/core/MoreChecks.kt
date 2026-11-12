@@ -150,5 +150,28 @@ fun moreChecks() {
     check("hash mismatch leaves nothing", throws { Components.install(man[0].copy(sha256 = "0".repeat(64)), payload, File(root, "c2")) } && !File(root, "c2/engine-26.3.2").exists())
     check("non-https url rejected", throws { Components.parse("""{"components":[{"id":"e","version":"1","url":"http://x","sha256":"${"a".repeat(64)}"}]}""") })
 
+    // Touch settings (the engine's horizon-touch.json)
+    val tf = File(root, "touch/horizon-touch.json"); val ts = TouchSettings(tf)
+    check("defaults match the engine", ts.sensitivity == 1.0 && ts.virtualMouse && ts.vibrate && ts.gameAnimations && ts.resolutionPercent == 100 && ts.scheme == Scheme.JOYSTICK_CROSSHAIR && ts.controlStyle == "Mcpe")
+    check("default placements match the engine", ts.placement(TouchMode.CROSSHAIR, TouchControl.JUMP) == Placement(0.92, 0.78, 0.16) && ts.placement(TouchMode.DPAD, TouchControl.SNEAK) == Placement(0.13, 0.76, 0.10) && ts.placement(TouchMode.TAP, TouchControl.SNEAK) == Placement(0.81, 0.86, 0.115))
+    tf.parentFile.mkdirs(); tf.writeText("""{"custom_buttons":[{"k":1}],"future_option":"keep","sensitivity":2.5,"mode":"dpad","split_controls":true}""")
+    val ts2 = TouchSettings(tf); check("reads existing file", ts2.sensitivity == 2.5 && ts2.scheme == Scheme.DPAD_CROSSHAIR)
+    ts2.sensitivity = 99.0; ts2.resolutionPercent = 10; ts2.virtualMouseSpeed = 0.0; ts2.gameAnimations = false; ts2.leftHanded = true; ts2.buttonScale = 5.0
+    check("setters clamp to engine ranges", ts2.sensitivity == 3.0 && ts2.resolutionPercent == 25 && ts2.virtualMouseSpeed == 0.25 && ts2.buttonScale == 2.0 && !ts2.gameAnimations)
+    ts2.save(); val saved = Json.parse(tf.readText()).obj()
+    check("unknown keys survive a save", saved["future_option"] == "keep" && saved["custom_buttons"].arr().size == 1)
+    check("uses the engine's key names", saved["sensitivity"] == 3L && saved["resolution_scale_percent"] == 25L && saved["disable_game_animations"] == true && saved["left_handed"] == true && saved["mode"] == "dpad")
+    ts2.scheme = Scheme.JOYSTICK_TAP; ts2.save()
+    check("split cleared outside dpad", TouchSettings(tf).scheme == Scheme.JOYSTICK_TAP && Json.parse(tf.readText()).obj()["split_controls"] == false)
+    ts2.setPlacement(TouchMode.TAP, TouchControl.ATTACK, Placement(2.0, -1.0, 9.0, 3.0)); ts2.save()
+    val lay = Json.parse(tf.readText()).obj()["layouts"].arr()
+    check("layouts always 3 x 14", lay.size == 3 && lay.all { it.arr().size == 14 })
+    val att = TouchSettings(tf).placement(TouchMode.TAP, TouchControl.ATTACK)
+    check("placement clamped on save", att == Placement(0.975, 0.025, 0.45, 1.0) && TouchSettings(tf).placement(TouchMode.CROSSHAIR, TouchControl.ATTACK) == Placement(0.80, 0.64, 0.16))
+    ts2.resetPlacements(TouchMode.TAP); check("reset one mode", ts2.placement(TouchMode.TAP, TouchControl.ATTACK) == Placement(0.80, 0.64, 0.16))
+    ts2.setVisibility(TouchControl.CHAT, HIDDEN); check("visibility per control", ts2.visibility(TouchControl.CHAT) == HIDDEN && ts2.visibility(TouchControl.PAUSE) == FOLLOW_SCHEME && throws { ts2.setVisibility(TouchControl.CHAT, 7) })
+    check("bad style rejected", throws { ts2.controlStyle = "Nope" })
+    tf.writeText("not json"); check("corrupt file reads as defaults", TouchSettings(tf).sensitivity == 1.0)
+
     root.deleteRecursively()
 }

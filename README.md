@@ -2,7 +2,7 @@
 
 Android launcher for the [Horizon](https://github.com/horizon-rust/horizon) Rust engine. MIT, written from scratch (no code from ZalithLauncher2 or PojavLauncher).
 
-Done (core, covered by 81 dependency-free checks, `gradle :core:check`):
+Done (core, covered by 88 dependency-free checks, `gradle :core:check`):
 - Instances: isolated game folders, clone, export/import, pinned engine version per instance.
 - Worlds: list with version/size/last played (reads `level.dat`), per-world backup/restore, rename, delete, import.
   Restore never overwrites and refuses another game version unless accepted. Full-instance backup too.
@@ -12,7 +12,10 @@ Done (core, covered by 81 dependency-free checks, `gradle :core:check`):
 - Diagnostics: crash history with cause detection, log redaction and support export, file integrity check.
 - Offline accounts, graphics-API capability check (Vulkan 1.0/1.1, GLES 2.0/3.0), HNMod build-job state machine
   (shared by the Discord bot and the launcher), component updater with SHA-256 verification.
-- Touch-layout model, Modrinth search, update check, EN/RO UI (Play, Worlds, Servers, Mods, Controls, Logs tabs).
+- Controls and quick settings: edit the engine's own `horizon-touch.json` per instance (sensitivity, resolution scale,
+  virtual mouse, button size, schemes, per-control position/size/opacity/visibility for all 3 modes). Unknown keys in the
+  file are preserved. Settings and ranges follow Horizon (MIT, Horizon contributors) as used in GoyDevv/Horizon-Android.
+- Modrinth search, update check, EN/RO UI (Play, Worlds, Servers, Mods, Controls, Logs tabs).
 
 Not done: Microsoft login, real mod/engine download wiring, the layout editor, resource-pack validation, file explorer,
 skin viewer, Diagnostics and Settings screens, the Discord bot side of build jobs, and Android lifecycle handling

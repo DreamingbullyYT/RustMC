@@ -28,16 +28,6 @@ fun main() {
     check("delete", store.list().map { it.id } == listOf("my-world-2"))
     check("bad id rejected", throws { Instance("../x", "x") })
 
-    // Touch layouts
-    val l = TouchLayout.fromJson(TouchLayout.JAVA.toJson())
-    check("layout roundtrip", l == TouchLayout.JAVA)
-    check("move clamps on screen", TouchLayout.MCPE.move("jump", 5.0, -5.0).widgets.first { it.id == "jump" }.let { it.x == 1 - it.size / 2 && it.y == it.size / 2 })
-    check("presets have no overlaps", TouchLayout.PRESETS.all { it.overlaps().isEmpty() })
-    val dup = TouchLayout("d", listOf(Widget("a", WidgetKind.BUTTON, .5, .5, .1), Widget("b", WidgetKind.BUTTON, .52, .5, .1)))
-    check("overlap detected", dup.overlaps() == listOf("a" to "b"))
-    check("duplicate ids rejected", throws { TouchLayout.fromJson(TouchLayout("x", listOf(dup.widgets[0], dup.widgets[0])).toJson()) })
-    check("future format rejected", throws { TouchLayout.fromJson("""{"format":2,"widgets":[]}""") })
-
     // Crash analyzer
     check("oom", CrashAnalyzer.analyze("a\nmemory allocation of 4096 bytes failed\n").cause == Cause.OUT_OF_MEMORY)
     check("gpu", CrashAnalyzer.analyze("ERROR VK_ERROR_DEVICE_LOST in submit").cause == Cause.GPU_DRIVER)
