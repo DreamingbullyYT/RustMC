@@ -49,13 +49,6 @@ pub fn head(player: &str) -> Option<HeadSkin> {
     if let Some(found) = map.get(name) {
         return *found;
     }
-    // The game already prepared the selected account's skin (wardrobe, cloud
-    // or local file) into this launch's appearance handoff. That is the skin
-    // the game will show, so it wins over a public-profile lookup.
-    if let Some(skin) = prepared_skin() {
-        map.insert(name.to_owned(), Some(skin));
-        return Some(skin);
-    }
     // One attempt per name and session: a miss is cached as a miss.
     map.insert(name.to_owned(), None);
     let wanted = name.to_owned();
@@ -66,13 +59,6 @@ pub fn head(player: &str) -> Option<HeadSkin> {
         }
     });
     None
-}
-
-/// The skin this launch will actually use, already normalized to 64x64 RGBA.
-fn prepared_skin() -> Option<HeadSkin> {
-    let appearance = crate::skins::appearance::current()?;
-    let (rgba, _slim) = appearance.skin.as_ref()?;
-    from_rgba(64, 64, rgba)
 }
 
 fn agent() -> ureq::Agent {
@@ -115,7 +101,7 @@ fn fetch(name: &str) -> Option<HeadSkin> {
         .get("value")?
         .as_str()?;
     let payload: serde_json::Value =
-        serde_json::from_slice(&crate::skins::base64_decode(encoded)?).ok()?;
+        serde_json::from_slice(&base64_decode(encoded)?).ok()?;
     let url = payload.get("textures")?.get("SKIN")?.get("url")?.as_str()?;
     if !url.starts_with("https://textures.minecraft.net/")
         && !url.starts_with("http://textures.minecraft.net/")
@@ -132,6 +118,31 @@ fn fetch(name: &str) -> Option<HeadSkin> {
         .ok()?;
     let (w, h, rgba) = horizon_client::hud::decode_bytes(&png).ok()?;
     from_rgba(w, h, &rgba)
+}
+
+fn base64_decode(input: &str) -> Option<Vec<u8>> {
+    let mut output = Vec::with_capacity(input.len() * 3 / 4);
+    let mut accumulator = 0u32;
+    let mut bits = 0u8;
+    for byte in input.bytes() {
+        let value = match byte {
+            b'A'..=b'Z' => byte - b'A',
+            b'a'..=b'z' => byte - b'a' + 26,
+            b'0'..=b'9' => byte - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            b'=' => break,
+            b' ' | b'\n' | b'\r' | b'\t' => continue,
+            _ => return None,
+        };
+        accumulator = (accumulator << 6) | u32::from(value);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            output.push(((accumulator >> bits) & 0xff) as u8);
+        }
+    }
+    Some(output)
 }
 
 fn pixel(w: u32, h: u32, rgba: &[u8], x: u32, y: u32) -> Option<(u32, u8)> {
