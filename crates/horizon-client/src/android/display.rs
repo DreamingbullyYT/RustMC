@@ -47,6 +47,41 @@ impl RenderScale {
 
 #[cfg(target_os = "android")]
 static REQUESTED_SCALE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(100);
+#[cfg(target_os = "android")]
+static CONTENT_ASPECT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[cfg(target_os = "android")]
+pub fn set_native_content_aspect(aspect: [u32; 2]) {
+    let packed = (u64::from(aspect[0]) << 32) | u64::from(aspect[1]);
+    CONTENT_ASPECT.store(packed, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[cfg(target_os = "android")]
+fn native_content_rect(physical: [u32; 2]) -> [u32; 4] {
+    let [mut x, mut y, mut width, mut height] =
+        winit::platform::android::native_content_rect(physical);
+    if width == 0 || height == 0 {
+        return [x, y, width, height];
+    }
+    let aspect = CONTENT_ASPECT.load(std::sync::atomic::Ordering::Relaxed);
+    let aspect_w = (aspect >> 32) as u32;
+    let aspect_h = aspect as u32;
+    if aspect_w == 0 || aspect_h == 0 {
+        return [x, y, width, height];
+    }
+    let target = aspect_w as f64 / aspect_h as f64;
+    let current = width as f64 / height as f64;
+    if current > target {
+        let next = ((height as f64 * target).round() as u32).clamp(1, width);
+        x += (width - next) / 2;
+        width = next;
+    } else if current < target {
+        let next = ((width as f64 / target).round() as u32).clamp(1, height);
+        y += (height - next) / 2;
+        height = next;
+    }
+    [x, y, width, height]
+}
 
 #[cfg(target_os = "android")]
 pub fn set_scale(scale: RenderScale) {
@@ -63,7 +98,7 @@ fn desired(window: &winit::window::Window) -> Option<[u32; 2]> {
         return None;
     }
     let [_, _, width, height] =
-        winit::platform::android::native_content_rect([physical.width, physical.height]);
+        native_content_rect([physical.width, physical.height]);
     let view = [width.max(1), height.max(1)];
     let size = scale.buffer_size(view);
     winit::platform::android::set_native_input_scale([
@@ -79,19 +114,18 @@ fn desired(window: &winit::window::Window) -> Option<[u32; 2]> {
 
 #[cfg(target_os = "android")]
 fn set_render_size(window: &winit::window::Window, size: [u32; 2]) -> Result<[u32; 2], String> {
-    use winit::platform::android::WindowExtAndroid;
+    // Winit upstream has no fork-only set_render_size method. Keep the native
+    // window untouched and resize Horizon's render target to the requested
+    // content rectangle; desired() above keeps input scale in sync.
     let native = REQUESTED_SCALE.load(std::sync::atomic::Ordering::Relaxed) == 100;
     let physical = window.outer_size();
-    let rect = winit::platform::android::native_content_rect([physical.width, physical.height]);
-    let target = if native && rect == [0, 0, physical.width, physical.height] {
-        [0, 0]
+    let rect = native_content_rect([physical.width, physical.height]);
+    if native && rect == [0, 0, physical.width, physical.height] {
+        let actual = window.inner_size();
+        Ok([actual.width, actual.height])
     } else {
-        size
-    };
-    let actual = window
-        .set_render_size(winit::dpi::PhysicalSize::new(target[0], target[1]))
-        .map_err(|e| e.to_string())?;
-    Ok([actual.width, actual.height])
+        Ok(size)
+    }
 }
 
 /// Set logical dimensions before a renderer recreates its native surface.
