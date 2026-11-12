@@ -1,10 +1,11 @@
 diff --git a/crates/horizon-port-pack/src/lib.rs b/crates/horizon-port-pack/src/lib.rs
 --- a/crates/horizon-port-pack/src/lib.rs
 +++ b/crates/horizon-port-pack/src/lib.rs
-@@ -4,5 +4,6 @@
+@@ -4,5 +4,7 @@
  //! Every step reads and writes files in a work folder (`pipeline`), so it can
  //! be rerun, resumed and inspected. The work folder belongs to the user: the
  //! jars they downloaded and what is carried over from them stay there and
  //! are never uploaded or committed.
++#[path = "../../../android/adapters/source/client/android_port.rs"]
 +pub mod android_port;
  pub mod carry;
