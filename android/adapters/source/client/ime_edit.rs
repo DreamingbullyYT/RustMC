@@ -1,5 +1,5 @@
 //! Translate full IME buffers into the shared text editor's Unicode operations.
-use horizon_client::osk::Output;
+use crate::android_osk::Output;
 
 /// Android supplies complete editor buffers. A newline confirms a single-line
 /// editor, but must remain ordinary text when writing a book page.
