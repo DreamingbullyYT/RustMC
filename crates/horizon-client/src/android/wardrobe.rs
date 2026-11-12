@@ -12,7 +12,7 @@ use crate::{
     },
 };
 use horizon_client::hud::rgba;
-use crate::{android_skin_head as skin_head, android_ui_theme::{Face, Ui}};
+use crate::{android_skin_head::{self as skin_head, HeadSkin}, android_ui_theme::{Face, Ui}};
 use std::{
     path::{Path, PathBuf},
     sync::mpsc,
