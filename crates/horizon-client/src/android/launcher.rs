@@ -11,12 +11,8 @@ mod login;
 mod pages;
 #[path = "wardrobe.rs"]
 mod wardrobe;
-use horizon_client::{
-    Result,
-    gfx::Renderer,
-    hud::{HudAtlas, HudBatch},
-    ,
-};
+use horizon_client::{Result, gfx::Renderer, hud::{HudAtlas, HudBatch}};
+use crate::android_ui_theme::{Face, Ui};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex, mpsc},
