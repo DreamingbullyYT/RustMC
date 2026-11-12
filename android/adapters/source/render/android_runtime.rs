@@ -49,6 +49,16 @@ pub fn note_input(kind: InputMode) -> bool {
     input.1 = kind;
     true
 }
+static NATIVE_DEVICE_IDS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, i32>>> = std::sync::OnceLock::new();
+static NEXT_NATIVE_DEVICE_ID: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(1);
+
+pub fn native_device_id(id: winit::event::DeviceId) -> i32 {
+    let key = format!("{id:?}");
+    let ids = NATIVE_DEVICE_IDS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+    let mut ids = ids.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    *ids.entry(key).or_insert_with(|| NEXT_NATIVE_DEVICE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+}
+
 pub fn gamepad_event(id: i32, event: &winit::event::DeviceEvent) -> bool {
     use winit::event::{DeviceEvent, ElementState};
     let activity = {
