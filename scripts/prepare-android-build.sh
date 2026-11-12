@@ -49,6 +49,10 @@ cp -a "$ROOT/packaging/android" "$ENGINE/packaging/"
 mkdir -p "$ENGINE/tools"
 find "$ROOT/tools" -maxdepth 1 -type f \( -name 'android*.py' -o -name 'check_android_release.py' \) -exec cp {} "$ENGINE/tools/" \;
 
+# Apply only the Android auth reset seam; the patch is stored in this repository,
+# not committed into or maintained as a fork of the upstream engine.
+git -C "$ENGINE" apply "$ROOT/patches/0002-android-auth-clear.patch"
+
 # Make the Android cdylib a transient workspace member; the upstream checkout itself stays clean.
 python3 - "$ENGINE/Cargo.toml" <<'PY'
 from pathlib import Path
