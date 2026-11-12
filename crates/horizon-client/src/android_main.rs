@@ -31,6 +31,12 @@ pub mod jar_transpiler;
 pub mod official_install;
 #[path = "../../../android/adapters/source/client/resource_install.rs"]
 pub mod resource_install;
+#[path = "../../../android/adapters/source/client/ui_theme.rs"]
+pub mod android_ui_theme;
+#[path = "../../../android/adapters/source/client/skin_head.rs"]
+mod android_skin_head;
+#[path = "../../../android/adapters/source/client/ui_text.rs"]
+mod android_ui_text;
 #[path = "../../../android/adapters/source/client/touch_ui.rs"]
 pub mod touch_ui;
 
