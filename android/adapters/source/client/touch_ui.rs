@@ -959,7 +959,7 @@ impl TouchUi {
         a: &HudAtlas,
         p: [f32; 2],
     ) -> Option<Output> {
-        let ui = crate::ui_theme::Ui::new(a, b, (0.0, 0.0));
+        let ui = crate::android_ui_theme::Ui::new(a, b, (0.0, 0.0));
         self.keyboard.as_mut()?.touch(
             ui.w,
             ui.h,
@@ -972,7 +972,7 @@ impl TouchUi {
     }
     pub fn draw_keyboard(&self, b: &mut HudBatch, a: &HudAtlas) {
         if let Some(k) = &self.keyboard {
-            let mut ui = crate::ui_theme::Ui::new(a, b, (0.0, 0.0));
+            let mut ui = crate::android_ui_theme::Ui::new(a, b, (0.0, 0.0));
             k.draw(&mut ui, false, crate::gamepad::GlyphStyle::Xbox);
             ui.finish();
         }
@@ -1000,14 +1000,14 @@ pub fn aux_mouse_phase(pressed: bool, owned: bool, touched: bool) -> Option<Touc
 }
 
 const COLOR_SWATCHES: [(u32, &str); 8] = [
-    (crate::ui_theme::color::hex(0x1E1B2E, 184), "Obsidian"),
-    (crate::ui_theme::color::hex(0x9A7BFF, 235), "Violet"),
-    (crate::ui_theme::color::hex(0xD0BCFF, 235), "Lavender"),
-    (crate::ui_theme::color::hex(0x38BDF8, 235), "Cyan"),
-    (crate::ui_theme::color::hex(0x34D399, 235), "Emerald"),
-    (crate::ui_theme::color::hex(0xFBBF24, 235), "Amber"),
-    (crate::ui_theme::color::hex(0xF87171, 235), "Crimson"),
-    (crate::ui_theme::color::hex(0xF4EFFA, 235), "Snow"),
+    (crate::android_ui_theme::color::hex(0x1E1B2E, 184), "Obsidian"),
+    (crate::android_ui_theme::color::hex(0x9A7BFF, 235), "Violet"),
+    (crate::android_ui_theme::color::hex(0xD0BCFF, 235), "Lavender"),
+    (crate::android_ui_theme::color::hex(0x38BDF8, 235), "Cyan"),
+    (crate::android_ui_theme::color::hex(0x34D399, 235), "Emerald"),
+    (crate::android_ui_theme::color::hex(0xFBBF24, 235), "Amber"),
+    (crate::android_ui_theme::color::hex(0xF87171, 235), "Crimson"),
+    (crate::android_ui_theme::color::hex(0xF4EFFA, 235), "Snow"),
 ];
 
 const KB_ROWS: &[&[(&str, &str, f32)]] = &[
@@ -1159,7 +1159,7 @@ const MOUSE_AND_ACTION_ITEMS: &[(&str, &str)] = &[
 ];
 
 fn draw_input_picker_modal(
-    ui: &mut crate::ui_theme::Ui<'_>,
+    ui: &mut crate::android_ui_theme::Ui<'_>,
     w: f32,
     h: f32,
     step: crate::touch::PickerStep,
@@ -1168,8 +1168,8 @@ fn draw_input_picker_modal(
     mcpe_exclusive: bool,
 ) {
     use crate::touch::PickerStep;
-    use crate::ui_theme::Face;
-    let theme = crate::ui_theme::active_theme();
+    use crate::android_ui_theme::Face;
+    let theme = crate::android_ui_theme::active_theme();
     let bg_card = theme.bg_solid;
     let bg_hi = theme.surface;
     let border_c = theme.border;
@@ -1444,7 +1444,7 @@ pub fn draw_goy_hud(
     virtual_mouse: bool,
 ) {
     use crate::touch::{Control, ControlStyle};
-    use crate::ui_theme::{Ui, color};
+    use crate::android_ui_theme::{Ui, color};
     crate::touch::set_current_hud_opacity_scale(if tc.editor.is_some() {
         1.0
     } else {
@@ -1613,7 +1613,7 @@ pub fn draw_goy_hud(
 }
 
 fn draw_mcpe_custom_plate(
-    ui: &mut crate::ui_theme::Ui,
+    ui: &mut crate::android_ui_theme::Ui,
     rect: [f32; 4],
     alpha: f32,
     pressed: bool,
@@ -1679,8 +1679,8 @@ fn hub_metrics(w: f32, h: f32) -> (f32, f32, f32, f32, f32, f32, f32, f32, f32) 
 impl TouchUi {
     fn step_animations(&self) -> (f32, f32) {
         let open_target = if self.floating_menu { 1.0 } else { 0.0 };
-        if crate::ui_theme::motion::game_animations_disabled()
-            || crate::ui_theme::motion::reduced_motion()
+        if crate::android_ui_theme::motion::game_animations_disabled()
+            || crate::android_ui_theme::motion::reduced_motion()
         {
             self.open_anim.set(open_target);
             self.tab_anim.set(1.0);
@@ -1725,7 +1725,7 @@ impl TouchUi {
         use crate::touch::ControlStyle;
         self.goy_mode = settings.control_style == ControlStyle::GoyControl;
         self.pointer_off = !settings.virtual_mouse_enabled;
-        let ui = crate::ui_theme::Ui::mobile(a, b, (0.0, 0.0));
+        let ui = crate::android_ui_theme::Ui::mobile(a, b, (0.0, 0.0));
         let (w, h) = (ui.w, ui.h);
         let p = [
             p_gui[0] * ui.batch.scale / ui.density,
@@ -2649,7 +2649,7 @@ impl TouchUi {
         settings: &crate::touch::Settings,
     ) {
         use crate::touch::ControlStyle;
-        use crate::ui_theme::{Face, Icon, Ui, color};
+        use crate::android_ui_theme::{Face, Icon, Ui, color};
         let hud_scale = crate::touch::current_hud_opacity_scale();
         if hud_scale <= 0.001 && !self.floating_menu {
             return;
@@ -2660,7 +2660,7 @@ impl TouchUi {
         let open_ease = 1.0 - (1.0 - open_t).powi(3);
         let tab_ease = 1.0 - (1.0 - tab_t).powi(3);
 
-        let theme = crate::ui_theme::active_theme();
+        let theme = crate::android_ui_theme::active_theme();
         let surface_bg = theme.bg_solid;
         let sidebar_bg = theme.sidebar_bg;
         let card_bg = theme.surface;
@@ -4217,8 +4217,8 @@ fn shape_name(shape: u8) -> &'static str {
     }
 }
 
-pub fn control_icon_from_id(icon_id: u8) -> Option<(crate::ui_theme::Icon, &'static str)> {
-    use crate::ui_theme::Icon;
+pub fn control_icon_from_id(icon_id: u8) -> Option<(crate::android_ui_theme::Icon, &'static str)> {
+    use crate::android_ui_theme::Icon;
     match icon_id {
         1 => Some((Icon::Crosshair, "Crosshair")),
         2 => Some((Icon::Gamepad, "Gamepad")),
@@ -4241,7 +4241,7 @@ pub fn control_icon_label(icon_id: u8) -> &'static str {
 }
 
 fn draw_button_icon_and_label(
-    ui: &mut crate::ui_theme::Ui,
+    ui: &mut crate::android_ui_theme::Ui,
     rect: [f32; 4],
     icon_id: u8,
     label: &str,
@@ -4253,7 +4253,7 @@ fn draw_button_icon_and_label(
             let ic_sz = (rh * 0.44).clamp(11.0, 18.0);
             ui.icon(ic, rx + 6.0, ry + (rh - ic_sz) * 0.5, ic_sz, fg_col);
             ui.centered_fit(
-                crate::ui_theme::Face::SemiBold,
+                crate::android_ui_theme::Face::SemiBold,
                 (rh * 0.28).clamp(9.0, 14.0),
                 [
                     rx + ic_sz + 8.0,
@@ -4274,7 +4274,7 @@ fn draw_button_icon_and_label(
                 fg_col,
             );
             ui.centered_fit(
-                crate::ui_theme::Face::SemiBold,
+                crate::android_ui_theme::Face::SemiBold,
                 (rh * 0.22).clamp(8.0, 11.5),
                 [rx + 2.0, ry + rh * 0.52, (rw - 4.0).max(6.0), rh * 0.44],
                 fg_col,
@@ -4292,7 +4292,7 @@ fn draw_button_icon_and_label(
         }
     } else {
         ui.centered_fit(
-            crate::ui_theme::Face::SemiBold,
+            crate::android_ui_theme::Face::SemiBold,
             (rh * 0.30).clamp(9.5, 14.5),
             [rx + 3.0, ry + 2.0, (rw - 6.0).max(6.0), (rh - 4.0).max(6.0)],
             fg_col,
@@ -4301,7 +4301,7 @@ fn draw_button_icon_and_label(
     }
 }
 
-fn draw_preview_brackets(ui: &mut crate::ui_theme::Ui, rect: [f32; 4], col: u32) {
+fn draw_preview_brackets(ui: &mut crate::android_ui_theme::Ui, rect: [f32; 4], col: u32) {
     let [x, y, w, h] = rect;
     let arm = 8.0;
     let t = 1.6;
@@ -4324,7 +4324,7 @@ fn draw_preview_brackets(ui: &mut crate::ui_theme::Ui, rect: [f32; 4], col: u32)
 /// and a bottom horizontal cyan slider track (`#1DB4F6`) with a white circular thumb knob.
 #[allow(clippy::too_many_arguments)]
 fn draw_m3_stepper_cell(
-    ui: &mut crate::ui_theme::Ui,
+    ui: &mut crate::android_ui_theme::Ui,
     rect: [f32; 4],
     label: &str,
     fraction: f32,
@@ -4334,7 +4334,7 @@ fn draw_m3_stepper_cell(
     _border_c: u32,
     text_c: u32,
 ) {
-    use crate::ui_theme::Face;
+    use crate::android_ui_theme::Face;
     let [rx, ry, cw, ch] = rect;
     let rad = (ch * 0.16).clamp(6.0, 9.0);
     // Clean Material 3 Expressive tonal container
@@ -4414,7 +4414,7 @@ fn draw_m3_stepper_cell(
 
 #[allow(clippy::too_many_arguments)]
 fn draw_m3_selector_cell(
-    ui: &mut crate::ui_theme::Ui,
+    ui: &mut crate::android_ui_theme::Ui,
     rect: [f32; 4],
     title: &str,
     value: &str,
@@ -4424,7 +4424,7 @@ fn draw_m3_selector_cell(
     text_c: u32,
     muted_c: u32,
 ) {
-    use crate::ui_theme::Face;
+    use crate::android_ui_theme::Face;
     let [rx, ry, cw, ch] = rect;
     let rad = (ch * 0.16).clamp(6.0, 9.0);
     ui.rounded(rx, ry, cw, ch, rad, bg_hi);
@@ -4459,7 +4459,7 @@ fn draw_m3_selector_cell(
 /// Circular Swatch Chip matching `90511.png` with a crisp white outer selection ring.
 #[allow(clippy::too_many_arguments)]
 fn draw_m3_swatch_chip(
-    ui: &mut crate::ui_theme::Ui,
+    ui: &mut crate::android_ui_theme::Ui,
     sx: f32,
     sy: f32,
     sw_w: f32,
@@ -4480,7 +4480,7 @@ fn draw_m3_swatch_chip(
             d + 6.0,
             d + 6.0,
             rad + 3.0,
-            crate::ui_theme::color::with_alpha(accent, 0.32),
+            crate::android_ui_theme::color::with_alpha(accent, 0.32),
         );
     }
     ui.rounded(cx, cy, d, d, rad, col);
@@ -4621,7 +4621,7 @@ pub fn draw_hud_editor(
     notice: Option<&str>,
 ) {
     use crate::touch::{Control, ControlStyle, CustomButton, JoystickMoveArea, PickerStep};
-    use crate::ui_theme::{Face, Icon, Ui, color};
+    use crate::android_ui_theme::{Face, Icon, Ui, color};
     let Some(ed) = &tc.editor else {
         return;
     };
@@ -4630,7 +4630,7 @@ pub fn draw_hud_editor(
     let dp_to_gui = ui.density / ui.batch.scale;
     let gui_to_dp = ui.batch.scale / ui.density;
 
-    let theme = crate::ui_theme::active_theme();
+    let theme = crate::android_ui_theme::active_theme();
     let bg_card = theme.bg_solid;
     let bg_hi = theme.surface;
     let border_c = theme.border;
@@ -4770,7 +4770,7 @@ pub fn draw_hud_editor(
                 p.shadow_size,
                 shadow_c,
             );
-            let fg_col = crate::ui_theme::color::with_alpha(text_c, alpha);
+            let fg_col = crate::android_ui_theme::color::with_alpha(text_c, alpha);
             draw_button_icon_and_label(
                 &mut ui,
                 [rx, ry, rw, rh],
@@ -4834,7 +4834,7 @@ pub fn draw_hud_editor(
                 p.shadow_size,
                 shadow_c,
             );
-            let fg_col = crate::ui_theme::color::with_alpha(text_c, alpha);
+            let fg_col = crate::android_ui_theme::color::with_alpha(text_c, alpha);
             draw_button_icon_and_label(&mut ui, [rx, ry, rw, rh], p.icon_id, &label, fg_col);
         } else {
             let dp_to_gui = ui.batch.width / w.max(1.0);
@@ -7017,7 +7017,7 @@ pub fn touch_hud_editor(
     ended: bool,
 ) -> bool {
     use crate::touch::{Control, ControlStyle, CustomButton, EditorDragKind, Mode, PickerStep};
-    let ui = crate::ui_theme::Ui::mobile(a, b, (0.0, 0.0));
+    let ui = crate::android_ui_theme::Ui::mobile(a, b, (0.0, 0.0));
     let (w, h) = (ui.w, ui.h);
     let p = [point[0] * w, point[1] * h];
     let inside =
