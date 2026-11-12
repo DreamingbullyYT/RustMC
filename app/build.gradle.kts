@@ -149,8 +149,6 @@ tasks.configureEach {
 }
 
 dependencies {
-    implementation(project(":zalith:LayerController"))
-    implementation(project(":zalith:ControlEditor"))
     implementation(platform("androidx.compose:compose-bom:2024.09.03"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")

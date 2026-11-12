@@ -30,9 +30,7 @@ import dev.horizon.launcher.data.PlatformInfo
 import dev.horizon.launcher.data.Release
 import dev.horizon.launcher.data.SignInInfo
 import dev.horizon.launcher.data.TelemetryInfo
-import dev.horizon.launcher.data.TouchControlsInfo
 import dev.horizon.launcher.auth.MicrosoftAuth
-import dev.horizon.launcher.game.TouchControlEditorActivity
 import dev.horizon.launcher.data.InstanceInfo
 import dev.horizon.launcher.data.InstalledVersion
 import dev.horizon.launcher.data.ModInfo
@@ -72,7 +70,6 @@ class MainActivity : ComponentActivity() {
     private var signInInfoState by mutableStateOf<SignInInfo?>(null)
     private var platformState by mutableStateOf<PlatformInfo?>(null)
     private var releasesState by mutableStateOf<List<Release>>(emptyList())
-    private var touchControlsState by mutableStateOf<TouchControlsInfo?>(null)
     private var telemetryState by mutableStateOf<TelemetryInfo?>(null)
     private var browseCatalogState by mutableStateOf<BrowseCatalog?>(null)
     private var browseItemsState by mutableStateOf<List<BrowseItem>>(emptyList())
@@ -154,7 +151,6 @@ class MainActivity : ComponentActivity() {
                 signInInfo = signInInfoState,
                 platform = platformState,
                 releases = releasesState,
-                touchControls = touchControlsState,
                 telemetry = telemetryState,
                 browseCatalog = browseCatalogState,
                 browseItems = browseItemsState,
@@ -297,16 +293,6 @@ class MainActivity : ComponentActivity() {
                         refreshDashboardState()
                         "Diagnostics preference updated."
                     }
-                },
-                onSaveTouchControls = { patch ->
-                    run("Saving touch preferences") {
-                        Core.saveTouchControls(patch)
-                        refreshDashboardState()
-                        "Touch preferences saved."
-                    }
-                },
-                onOpenControlsEditor = {
-                    startActivity(Intent(this, TouchControlEditorActivity::class.java))
                 },
                 onSearchBrowse = { source, kind, query ->
                     run("Searching add-on catalog") {
@@ -571,7 +557,6 @@ class MainActivity : ComponentActivity() {
         val signIn = runCatching { Core.signInInfo() }.getOrNull()
         val platform = runCatching { Core.platform() }.getOrNull()
         val releases = runCatching { Core.releases() }.getOrDefault(emptyList())
-        val touchControls = runCatching { Core.touchControls() }.getOrNull()
         val telemetry = runCatching { Core.telemetry() }.getOrNull()
         val browseCatalog = runCatching { Browse.catalog() }.getOrNull()
         val browseInstalled = runCatching { Browse.installed() }.getOrDefault(emptyList())
@@ -593,18 +578,6 @@ class MainActivity : ComponentActivity() {
         signInInfoState = signIn
         platformState = platform
         releasesState = releases
-        touchControlsState = touchControls
-        touchControls?.let { controls ->
-            getSharedPreferences("zalith-touch-settings", MODE_PRIVATE).edit()
-                .putBoolean("touch_enabled", controls.enabled)
-                .putFloat("touch_opacity", controls.opacity)
-                .putFloat("look_sensitivity", controls.lookSensitivity)
-                .putBoolean("left_handed", controls.leftHanded)
-                .putBoolean("auto_jump", controls.autoJump)
-                .putBoolean("hold_to_sprint", controls.holdToSprint)
-                .putBoolean("haptics", controls.haptics)
-                .apply()
-        }
         telemetryState = telemetry
         browseCatalogState = browseCatalog
         browseInstalledState = browseInstalled

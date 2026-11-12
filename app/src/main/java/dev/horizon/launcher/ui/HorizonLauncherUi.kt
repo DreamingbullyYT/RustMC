@@ -99,7 +99,6 @@ private enum class AtlasPage(val label: String, val icon: androidx.compose.ui.gr
     DISCOVER("Discover", Icons.Default.Search),
     SERVERS("Servers", Icons.Default.Public),
     ACCOUNTS("Accounts", Icons.Default.Person),
-    CONTROLS("Controls", Icons.Default.SportsEsports),
     SYSTEM("System", Icons.Default.Settings)
 }
 
@@ -124,7 +123,6 @@ fun HorizonLauncherUi(
     signInInfo: SignInInfo?,
     platform: PlatformInfo?,
     releases: List<Release>,
-    touchControls: TouchControlsInfo?,
     telemetry: TelemetryInfo?,
     browseCatalog: BrowseCatalog?,
     browseItems: List<BrowseItem>,
@@ -160,8 +158,6 @@ fun HorizonLauncherUi(
     onSaveSettings: (JSONObject) -> Unit,
     onSetNoAi: (Boolean) -> Unit,
     onSetTelemetry: (Boolean) -> Unit,
-    onSaveTouchControls: (JSONObject) -> Unit,
-    onOpenControlsEditor: () -> Unit,
     onSearchBrowse: (String, String, String) -> Unit,
     onInstallBrowse: (String, String) -> Unit,
     onRemoveBrowse: (String) -> Unit
@@ -229,7 +225,6 @@ fun HorizonLauncherUi(
             )
             AtlasPage.SERVERS -> ServersAtlas(servers, onAddServer, onRemoveServer)
             AtlasPage.ACCOUNTS -> AccountsAtlas(accounts, signInInfo, playerName, onSelectAccount, onAddOffline, onRemoveOffline, onRemoveAccount, onUseGameName, onSignIn)
-            AtlasPage.CONTROLS -> ControlsAtlas(touchControls, onSaveTouchControls, onOpenControlsEditor)
             AtlasPage.SYSTEM -> SystemAtlas(
                 status, settings, platform, releases, telemetry, toolchainReady, darkMode, onSetDarkMode, renderApi, onSetRenderApi,
                 onSaveSettings, onSetNoAi, onSetTelemetry, onRefresh, onShowBuildLog, onShowGameLog, onInstallVersion
@@ -377,7 +372,6 @@ private fun HomeAtlas(
         Spacer(Modifier.height(17.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FeatureTile("Mod studio", "Compile HNMods and manage add-ons", Icons.Default.Extension, Modifier.weight(1f)) { onNavigate(AtlasPage.MODS) }
-            FeatureTile("Touch lab", "Edit your full control layout", Icons.Default.Gamepad, Modifier.weight(1f)) { onNavigate(AtlasPage.CONTROLS) }
         }
         Spacer(Modifier.height(12.dp))
         Text("PLAYER  ·  ${playerName.ifBlank { "Local profile" }}", color = MutedInk, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
@@ -644,56 +638,6 @@ private fun AccountsAtlas(
         if (accounts != null) Text("Owner gate: ${if (accounts.hasOwner) "open" else "closed"} · keychain: ${if (accounts.keychain) "available" else "not available"}", color = MutedInk, fontSize = 9.sp, modifier = Modifier.padding(top = 12.dp))
     }
     if (add) NameDialog("Add offline profile", "3–16 letters, numbers or _", { add = false }, { add = false; onAddOffline(it) })
-}
-
-@Composable
-private fun ControlsAtlas(
-    controls: TouchControlsInfo?, onSave: (JSONObject) -> Unit, onOpenEditor: () -> Unit
-) {
-    var enabled by remember(controls) { mutableStateOf(controls?.enabled ?: true) }
-    var leftHanded by remember(controls) { mutableStateOf(controls?.leftHanded ?: false) }
-    var autoJump by remember(controls) { mutableStateOf(controls?.autoJump ?: false) }
-    var holdSprint by remember(controls) { mutableStateOf(controls?.holdToSprint ?: false) }
-    var haptics by remember(controls) { mutableStateOf(controls?.haptics ?: true) }
-    var opacity by remember(controls) { mutableFloatStateOf(controls?.opacity ?: .72f) }
-    var size by remember(controls) { mutableFloatStateOf(controls?.buttonSize ?: 1f) }
-    var sensitivity by remember(controls) { mutableFloatStateOf(controls?.lookSensitivity ?: 1f) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp)) {
-        PageHeading("Touch laboratory", "The full Zalith editor is integrated separately from these engine-level preferences.")
-        Surface(color = Brush.linearGradient(listOf(Blue, BlueDeep)).let { brush -> White }, shape = RoundedCornerShape(24.dp)) {
-            Column(Modifier.padding(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Gamepad, null, tint = Blue, modifier = Modifier.size(34.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("ZALITH CONTROL EDITOR", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Black)
-                        Text("Drag · resize · layers · styles · joystick", color = MutedInk, fontSize = 9.sp)
-                    }
-                }
-                Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().padding(top = 14.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) {
-                    Icon(Icons.Default.OpenInFull, null); Spacer(Modifier.width(7.dp)); Text("OPEN FULL CONTROL EDITOR")
-                }
-            }
-        }
-        Spacer(Modifier.height(18.dp))
-        SectionHeading("Engine touch preferences", "Core-backed")
-        SettingSwitch("Touch controls enabled", enabled) { enabled = it }
-        SettingSwitch("Left-handed mode", leftHanded) { leftHanded = it }
-        SettingSwitch("Auto jump", autoJump) { autoJump = it }
-        SettingSwitch("Hold to sprint", holdSprint) { holdSprint = it }
-        SettingSwitch("Haptic feedback", haptics) { haptics = it }
-        SliderSetting("Control opacity", opacity, .3f..1f, { opacity = it }, "${(opacity * 100).toInt()}%")
-        SliderSetting("Button scale", size, .7f..1.5f, { size = it }, String.format(Locale.US, "%.2fx", size))
-        SliderSetting("Look sensitivity", sensitivity, .25f..2f, { sensitivity = it }, String.format(Locale.US, "%.2fx", sensitivity))
-        Button(
-            onClick = {
-                onSave(JSONObject().put("enabled", enabled).put("left_handed", leftHanded)
-                    .put("auto_jump", autoJump).put("hold_to_sprint", holdSprint).put("haptics", haptics)
-                    .put("opacity", opacity.toDouble()).put("button_size", size.toDouble()).put("look_sensitivity", sensitivity.toDouble()))
-            },
-            modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Ink), shape = RoundedCornerShape(14.dp)
-        ) { Text("SAVE ENGINE PREFERENCES") }
-    }
 }
 
 @Composable
