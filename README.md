@@ -1,17 +1,24 @@
-# Horizon Android — rebuild
+# Horizon Android — clean rebuild
 
-This repository is being restarted from a clean baseline.
+This repository is the new integration workspace.
 
-## Sources
-- Android implementation reference: https://github.com/GoyDevv/Horizon-Android
-- Android Edition architecture baseline: https://github.com/DreamingbullyYT/horizon-android-edition
+## Source repositories
+- `android-base/`: the existing Horizon Android Edition project, pinned to an exact commit.
+- `references/goy-horizon-android/`: GoyDevv's Android port, kept as a reference for Android controls, Quick Settings, file management, and runtime integration.
 - Engine upstream: https://github.com/horizon-rust/horizon
 
-## Project rules
-- Keep the Horizon engine as close to upstream as possible.
-- Keep Android-specific code in separate modules and overlay files.
-- Keep upstream patches minimal, documented, and automatically checked.
-- Rebuild the Android launcher UI independently with Jetpack Compose Material 3.
-- Preserve licenses and attribution for all reused code.
+## Clone
+```sh
+git clone --recurse-submodules https://github.com/DreamingbullyYT/rustMC.git
+```
 
-The previous tracked project tree was intentionally removed to begin this rebuild. Git history remains available.
+## Rebuild rules
+- Rework the Android Edition baseline; do not copy its old UI blindly.
+- Design a new native Jetpack Compose / Material 3 launcher.
+- Keep Horizon engine code as close to PC upstream as possible.
+- Keep Android-only code in independent modules and overlay files.
+- Minimize, document, and test every upstream patch.
+- Audit and preserve all upstream and third-party licenses.
+- Use GoyDevv/Horizon-Android as a feature reference, not as an unchecked engine replacement.
+
+Git history before the clean reset is retained. The previous tracked working tree was removed intentionally.

@@ -1,0 +1,6 @@
+[submodule "android-base"]
+	path = android-base
+	url = https://github.com/DreamingbullyYT/horizon-android-edition.git
+[submodule "references/goy-horizon-android"]
+	path = references/goy-horizon-android
+	url = https://github.com/GoyDevv/Horizon-Android.git
