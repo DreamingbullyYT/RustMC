@@ -1,10 +1,10 @@
 // Android's native entry point. The simulation and renderer are shared with desktop.
 
-extern crate horizon_engine;
-pub use horizon_engine::*;
+extern crate horizon_client;
+pub use horizon_client::*;
 
 #[path = "../../../android/adapters/horizon_client.rs"]
-mod horizon_client;
+mod horizon_client_adapter;
 #[path = "../../../android/adapters/game.rs"]
 mod android_game;
 
