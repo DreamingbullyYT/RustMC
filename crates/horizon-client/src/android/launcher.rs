@@ -15,7 +15,7 @@ use horizon_client::{
     Result,
     gfx::Renderer,
     hud::{HudAtlas, HudBatch},
-    ui_theme::{Face, Ui},
+    ,
 };
 use std::{
     path::PathBuf,
