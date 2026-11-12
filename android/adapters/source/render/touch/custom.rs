@@ -237,7 +237,7 @@ pub fn friendly_token_name(token: &str) -> String {
 
 pub fn choices(raw_keys: bool) -> Vec<(String, String)> {
     if raw_keys {
-        crate::keybinds::available_keys()
+        crate::android_keybinds::available_keys()
             .iter()
             .map(|(name, _)| ((*name).into(), friendly_token_name(name)))
             .collect()
