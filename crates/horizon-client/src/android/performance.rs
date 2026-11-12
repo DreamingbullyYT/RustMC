@@ -71,11 +71,25 @@ pub fn start(home: &Path, metadata: Value) -> horizon_client::Result<()> {
         worker,
         dropped: 0,
     });
-    spans::record_timings(true);
+    
     spans::enable(true);
     ACTIVE.store(true, Ordering::Relaxed);
     Ok(())
 }
+fn take_timings() -> Value {
+    Value::Array(
+        spans::take()
+            .into_iter()
+            .map(|span| json!({
+                "stage": span.name,
+                "wall_ms": span.ms,
+                "thread_cpu_ms": span.cpu_ms,
+                "depth": span.depth,
+            }))
+            .collect(),
+    )
+}
+
 fn write_line(file: &mut impl Write, row: &Value) -> std::io::Result<usize> {
     let bytes = serde_json::to_vec(row)?;
     file.write_all(&bytes)?;
@@ -107,7 +121,7 @@ pub fn record(frame: f32, cpu: f32, gpu: &[f32], phases: [f32; 4]) -> Option<Val
     let r = guard.as_mut()?;
     if r.start.elapsed().as_secs() >= MAX_SECONDS {
         ACTIVE.store(false, Ordering::Relaxed);
-        spans::record_timings(false);
+        
         spans::enable(false);
         return None;
     }
@@ -126,7 +140,7 @@ pub fn record(frame: f32, cpu: f32, gpu: &[f32], phases: [f32; 4]) -> Option<Val
     }
     let row = json!({"type":"sample","t_ms":r.start.elapsed().as_millis(),
         "window_wall_ms":r.interval.elapsed().as_millis(),"frames":r.frames.summary(),
-        "timings":spans::drain_timings(),"slow_events":std::mem::take(&mut r.slow),
+        "timings":take_timings(),"slow_events":std::mem::take(&mut r.slow),
         "dropped_samples":r.dropped});
     r.frames.reset();
     r.interval = Instant::now();
@@ -140,7 +154,7 @@ pub fn submit(mut row: Value, context: Value) {
             Err(mpsc::TrySendError::Full(_)) => r.dropped += 1,
             Err(mpsc::TrySendError::Disconnected(_)) => {
                 ACTIVE.store(false, Ordering::Relaxed);
-                spans::record_timings(false);
+                
                 spans::enable(false);
             }
         }
@@ -150,7 +164,7 @@ pub fn stop() {
     ACTIVE.store(false, Ordering::Relaxed);
     PROFILE_SWITCH.store(false, Ordering::Relaxed);
     PROFILE_OWNS_RECORDER.store(false, Ordering::Relaxed);
-    spans::record_timings(false);
+    
     spans::enable(false);
     if let Some(r) = RECORDER.lock().unwrap_or_else(|e| e.into_inner()).take() {
         drop(r.sender);
@@ -206,7 +220,7 @@ mod tests {
         assert!(export(&home).is_err());
         for _ in 0..4 {
             start(&home, json!({"renderer":"test"})).unwrap();
-            spans::job("mesh_section", || {
+            spans::time("mesh_section", || {
                 std::thread::sleep(Duration::from_millis(3))
             });
             slow_frame(
@@ -215,6 +229,7 @@ mod tests {
                     name: "tick_blocks",
                     ms: 70.0,
                     cpu_ms: 65.0,
+                    depth: 0,
                 }],
             );
             RECORDER.lock().unwrap().as_mut().unwrap().interval =
