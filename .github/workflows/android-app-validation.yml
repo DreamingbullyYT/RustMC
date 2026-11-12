@@ -8,6 +8,7 @@ on:
       - "android-storage/**"
       - "android-updater/**"
       - "android-instances/**"
+      - "android-mods/**"
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - "gradle.properties"

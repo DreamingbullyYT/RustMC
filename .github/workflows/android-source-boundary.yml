@@ -8,6 +8,7 @@ on:
       - "android-storage/**"
       - "android-updater/**"
       - "android-instances/**"
+      - "android-mods/**"
       - "android-platform/**"
       - "tools/check_android_boundary.py"
       - ".github/workflows/android-source-boundary.yml"

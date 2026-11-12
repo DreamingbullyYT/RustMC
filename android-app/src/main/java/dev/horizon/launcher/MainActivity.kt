@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import dev.horizon.launcher.ui.screens.FileManagerScreen
 import dev.horizon.launcher.ui.screens.HomeScreen
 import dev.horizon.launcher.ui.screens.InstancesScreen
+import dev.horizon.launcher.ui.screens.ModsScreen
 import dev.horizon.launcher.ui.screens.PlaceholderScreen
 import dev.horizon.launcher.ui.screens.UpdaterScreen
 import dev.horizon.launcher.ui.theme.HorizonColors
@@ -61,7 +62,7 @@ private fun HorizonApp() {
             when (selectedTab) {
                 0 -> HomeScreen(Modifier.padding(insets))
                 1 -> InstancesScreen(Modifier.padding(insets))
-                2 -> PlaceholderScreen("Mods & shaders", "HNMod, HMod and HShader will have separate compatibility and install flows.", Modifier.padding(insets))
+                2 -> ModsScreen(Modifier.padding(insets))
                 3 -> FileManagerScreen(Modifier.padding(insets))
                 else -> UpdaterScreen(Modifier.padding(insets))
             }
