@@ -9,6 +9,9 @@ if [ ! -f "$ENGINE/Cargo.toml" ]; then
   exit 1
 fi
 
+# Android input/IME extensions live in a pinned dependency fork, not in engine patches.
+"$ROOT/scripts/install-android-winit.sh" "$ENGINE"
+
 copy_file() {
   source="$ROOT/$1"
   target="$ENGINE/$2"
