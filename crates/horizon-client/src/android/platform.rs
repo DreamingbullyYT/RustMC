@@ -404,6 +404,9 @@ pub fn performance_power() -> serde_json::Value {
 pub fn clipboard_set(text: &str) {
     let _ = clipboard_write(text, false);
 }
+pub fn clipboard_set_checked(text: &str) -> bool {
+    clipboard_write(text, false)
+}
 pub fn copy_login_code(text: &str) -> bool {
     clipboard_write(text, true)
 }

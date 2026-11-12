@@ -82,6 +82,8 @@ mod native_ime;
 mod performance;
 #[path = "android/platform.rs"]
 mod platform;
+#[path = "../../../android/adapters/clipboard_ffi.rs"]
+mod clipboard_ffi;
 #[rustfmt::skip]
 #[allow(dead_code)]
 #[path = "../../../launcher/src/proxy.rs"]

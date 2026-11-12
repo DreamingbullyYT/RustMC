@@ -1,0 +1,10 @@
+[package]
+name = "arboard"
+version = "3.6.1"
+edition = "2024"
+license = "MIT"
+description = "Android clipboard adapter for Horizon's upstream input crate"
+
+[features]
+default = []
+wayland-data-control = []

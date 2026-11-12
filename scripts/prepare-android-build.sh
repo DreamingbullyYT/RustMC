@@ -53,6 +53,14 @@ if text.count(anchor) != 1:
     raise SystemExit("upstream workspace member anchor changed")
 if '"crates/horizon-android"' not in text:
     text = text.replace(anchor, anchor + '    "crates/horizon-android",\n', 1)
+if '[patch.crates-io]' not in text:
+    raise SystemExit("upstream [patch.crates-io] table is missing")
+if 'arboard = { path = "android/adapters/stubs/arboard" }' not in text:
+    text = text.replace(
+        '[patch.crates-io]\n',
+        '[patch.crates-io]\narboard = { path = "android/adapters/stubs/arboard" }\n',
+        1,
+    )
 path.write_text(text, encoding="utf-8")
 PY
 
