@@ -280,11 +280,11 @@ impl Launcher {
             ),
             Kind::ControlProfile => {
                 let game_home = c.game_home(&self.home);
-                let touch = horizon_client::touch::Settings::load_from(
+                let touch = crate::touch::Settings::load_from(
                     &game_home.join("horizon-touch.json"),
                 );
                 let style = touch.control_style;
-                let presets = horizon_client::touch::Settings::list_presets(&game_home, style);
+                let presets = crate::touch::Settings::list_presets(&game_home, style);
                 let choices = presets
                     .into_iter()
                     .enumerate()
@@ -305,16 +305,16 @@ impl Launcher {
                     .collect();
                 (
                     match style {
-                        horizon_client::touch::ControlStyle::Mcpe => "MCPE Control Presets",
-                        horizon_client::touch::ControlStyle::GoyControl => {
+                        crate::touch::ControlStyle::Mcpe => "MCPE Control Presets",
+                        crate::touch::ControlStyle::GoyControl => {
                             "GoyControl Control Presets"
                         }
                     },
                     match style {
-                        horizon_client::touch::ControlStyle::Mcpe => {
+                        crate::touch::ControlStyle::Mcpe => {
                             "Independent MCPE presets stored in controls/mcpe/. Default is protected."
                         }
-                        horizon_client::touch::ControlStyle::GoyControl => {
+                        crate::touch::ControlStyle::GoyControl => {
                             "Independent GoyControl presets stored in controls/goycontrol/. Default is protected."
                         }
                     },
@@ -375,8 +375,8 @@ impl Chooser {
     }
     pub fn draw(&mut self, ui: &mut Ui, targets: &mut Vec<([f32; 4], Action)>, modal_anim: f32) {
         let (w, h) = (ui.w, ui.h);
-        let theme = horizon_client::ui_theme::active_theme();
-        let spring_t = horizon_client::ui_theme::motion::spring_expressive_default(modal_anim.clamp(0.0, 1.0));
+        let theme = crate::android_ui_theme::active_theme();
+        let spring_t = crate::android_ui_theme::motion::spring_expressive_default(modal_anim.clamp(0.0, 1.0));
         let slide = (1.0 - spring_t) * 16.0;
         targets.clear();
         ui.draw_theme_background(0.0, 0.0, w, h, &theme);
