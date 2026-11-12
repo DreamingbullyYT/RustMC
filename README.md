@@ -1,11 +1,16 @@
 # Horizon Android — clean rebuild
 
-This repository is the new integration workspace.
+This repository is the integration workspace for the Android launcher and the upstream Horizon engine.
 
 ## Source repositories
-- `android-base/`: the existing Horizon Android Edition project, pinned to an exact commit.
-- `references/goy-horizon-android/`: GoyDevv's Android port, kept as a reference for Android controls, Quick Settings, file management, and runtime integration.
+- `android-base/`: pinned Android Edition source, used as a read-only reference for Kotlin/JNI, updater, storage and toolchain work.
+- `references/goy-horizon-android/`: pinned feature reference for touch controls, file management and Android runtime behavior.
 - Engine upstream: https://github.com/horizon-rust/horizon
+
+## Current audit
+- [Architecture audit](docs/architecture-audit-2026-11-12.md)
+- [Android port plan](docs/ANDROID_PORT_PLAN.md)
+- [Engine compatibility status](docs/ENGINE_COMPATIBILITY.md)
 
 ## Clone
 ```sh
@@ -13,12 +18,12 @@ git clone --recurse-submodules https://github.com/DreamingbullyYT/rustMC.git
 ```
 
 ## Rebuild rules
-- Rework the Android Edition baseline; do not copy its old UI blindly.
-- Design a new native Jetpack Compose / Material 3 launcher.
-- Keep Horizon engine code as close to PC upstream as possible.
-- Keep Android-only code in independent modules and overlay files.
-- Minimize, document, and test every upstream patch.
-- Audit and preserve all upstream and third-party licenses.
-- Use GoyDevv/Horizon-Android as a feature reference, not as an unchecked engine replacement.
+- Rebuild the launcher UI independently with native Jetpack Compose / Material 3.
+- Keep the PC engine as the source of truth; do not vendor a fork of the engine.
+- Keep Android UI, SAF, updater, toolchain and platform services in rustMC-owned modules.
+- Do not inject Android code into `game.rs` with `include!` or copy the legacy private-state game-loop bridge unchanged.
+- Use public platform APIs and the planned input-source seam; if an upstream extension is unavoidable, keep it tiny, documented and separately tested.
+- Check HNMod/HMod/HShader against the exact engine SHA, hook API and dependencies before building.
+- Preserve upstream and third-party licenses.
 
-Git history before the clean reset is retained. The previous tracked working tree was removed intentionally.
+The previous working tree was intentionally reset. Git history and the pinned source references remain available.
