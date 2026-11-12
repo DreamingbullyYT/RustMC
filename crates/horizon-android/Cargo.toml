@@ -14,7 +14,7 @@ horizon-chat-filter = { path = "../horizon-chat-filter" }
 horizon-narrator = { path = "../horizon-narrator" }
 horizon-client-input = { path = "../horizon-client-input" }
 horizon-anticheat = { path = "../horizon-anticheat" }
-horizon-engine = { package = "horizon-client", path = "../horizon-client", default-features = false }
+horizon-client = { path = "../horizon-client", default-features = false }
 android_logger = "0.15"
 regex = "1"
 horizon-hdr = { path = "../horizon-hdr" }
@@ -74,7 +74,7 @@ rustix = { version = "1", default-features = false, features = ["std", "time", "
 
 [features]
 default = ["mods", "audio"]
-audio = ["horizon-engine/audio"]
+audio = ["horizon-client/audio"]
 controllers = []
 mods = [] # Launcher mod index/metadata only; HNMod execution adapter is a separate follow-up.
 
