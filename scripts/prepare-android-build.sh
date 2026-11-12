@@ -36,6 +36,9 @@ for file in account.rs browser.rs proxy.rs skins.rs; do
   cp "$ROOT/launcher/src/$file" "$ENGINE/launcher/src/$file"
 done
 
+# account.rs declares account::ely and account::session as sibling source modules.
+cp -a "$ROOT/launcher/src/account" "$ENGINE/launcher/src/"
+
 # Original Gradle app and its Android build tooling.
 mkdir -p "$ENGINE/packaging"
 cp -a "$ROOT/packaging/android" "$ENGINE/packaging/"
