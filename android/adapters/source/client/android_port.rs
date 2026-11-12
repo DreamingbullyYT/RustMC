@@ -153,16 +153,19 @@ pub fn port_jar_natively(
         .map(str::to_owned)
         .collect();
 
-    let carry_report: Option<carry::Report> =
+    // The upstream carry report is intentionally not Deserialize: keep this adapter
+    // on the stable JSON fields it needs rather than adding derives to the engine crate.
+    let carry_report: Option<serde_json::Value> =
         pipeline::read_json(&port_work_dir.join("carry-report.json")).ok();
     let (blocks_ported, items_ported, recipes_upgraded, loot_tables_upgraded, worldgen_ported) =
-        if let Some(ref r) = carry_report {
+        if let Some(ref report) = carry_report {
+            let count = |key: &str| report.get(key).and_then(serde_json::Value::as_u64).unwrap_or(0) as usize;
             (
-                r.blocks.len(),
-                r.items,
-                r.recipes_upgraded,
-                r.loot_tables_upgraded + r.loot_tables_added,
-                r.worldgen,
+                report.get("blocks").and_then(serde_json::Value::as_array).map_or(0, Vec::len),
+                count("items"),
+                count("recipes_upgraded"),
+                count("loot_tables_upgraded") + count("loot_tables_added"),
+                count("worldgen"),
             )
         } else {
             (
