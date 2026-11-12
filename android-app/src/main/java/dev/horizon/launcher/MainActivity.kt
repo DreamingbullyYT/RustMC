@@ -20,6 +20,7 @@ import dev.horizon.launcher.ui.screens.FileManagerScreen
 import dev.horizon.launcher.ui.screens.HomeScreen
 import dev.horizon.launcher.ui.screens.InstancesScreen
 import dev.horizon.launcher.ui.screens.ModsScreen
+import dev.horizon.launcher.ui.screens.TouchControlsScreen
 import dev.horizon.launcher.ui.screens.UpdaterScreen
 import dev.horizon.launcher.ui.theme.HorizonColors
 import dev.horizon.launcher.ui.theme.HorizonTheme
@@ -34,8 +35,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun HorizonApp() {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Home", "Instances", "Mods", "Files", "Settings")
-    val icons = listOf("⌂", "▦", "◇", "▤", "⚙")
+    val tabs = listOf("Home", "Instances", "Mods", "Controls", "Files", "Settings")
+    val icons = listOf("⌂", "▦", "◇", "◎", "▤", "⚙")
     HorizonTheme {
         Scaffold(
             containerColor = HorizonColors.Background,
@@ -62,7 +63,8 @@ private fun HorizonApp() {
                 0 -> HomeScreen(Modifier.padding(insets))
                 1 -> InstancesScreen(Modifier.padding(insets))
                 2 -> ModsScreen(Modifier.padding(insets))
-                3 -> FileManagerScreen(Modifier.padding(insets))
+                3 -> TouchControlsScreen(Modifier.padding(insets))
+                4 -> FileManagerScreen(Modifier.padding(insets))
                 else -> UpdaterScreen(Modifier.padding(insets))
             }
         }

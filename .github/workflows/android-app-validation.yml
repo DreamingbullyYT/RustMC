@@ -9,8 +9,7 @@ on:
       - "android-updater/**"
       - "android-instances/**"
       - "android-mods/**"
-      - "android-runtime/**"
-      - "android-base"
+      - "android-controls/**"
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - "gradle.properties"
@@ -22,8 +21,7 @@ on:
       - "android-updater/**"
       - "android-instances/**"
       - "android-mods/**"
-      - "android-runtime/**"
-      - "android-base"
+      - "android-controls/**"
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - "gradle.properties"
@@ -33,18 +31,11 @@ on:
 permissions:
   contents: read
 
-env:
-  NDK_VERSION: "26.3.11579264"
-  RUST_TARGET: aarch64-linux-android
-
 jobs:
   assemble:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -52,33 +43,10 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: "platform-tools platforms;android-35 build-tools;35.0.0"
-      - name: Install Android NDK
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "ndk;${NDK_VERSION}"
-          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ env.RUST_TARGET }}
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Cache Cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            android-runtime/build/rust-target
-          key: rust-${{ runner.os }}-${{ hashFiles('android-base/android/UPSTREAM_PIN', 'android-base/android/android.patch', 'android-base/core/Cargo.lock') }}
-          restore-keys: rust-${{ runner.os }}-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Assemble debug APK with native Horizon runtime
+      - name: Assemble debug APK
         run: gradle --no-daemon :android-app:assembleDebug
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
