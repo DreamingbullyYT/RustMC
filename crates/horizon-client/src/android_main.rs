@@ -183,8 +183,8 @@ thread_local! {
     static APP: RefCell<Option<AndroidApp>> = const { RefCell::new(None) };
 }
 
-pub(crate) fn android_event_loop() -> Result<EventLoop<()>, winit::error::EventLoopError> {
-    APP.with(|app| {
+pub(crate) fn android_event_loop() -> Result<EventLoop<()>> {
+    Ok(APP.with(|app| {
         EventLoop::builder()
             .with_android_app(
                 app.borrow()
@@ -193,7 +193,7 @@ pub(crate) fn android_event_loop() -> Result<EventLoop<()>, winit::error::EventL
                     .clone(),
             )
             .build()
-    })
+    })?)
 }
 
 fn init_logging() {
@@ -281,7 +281,7 @@ fn android_main(app: AndroidApp) {
         return;
     };
     crate::android_runtime::configure_cache_dir(cache.clone());
-    horizon_client::official_install::configure_download_cache_dir(cache);
+    crate::official_install::configure_download_cache_dir(cache);
     crate::android_runtime::install_clipboard(
         crate::android_runtime::ClipboardHooks {
             get: platform::clipboard_get,
