@@ -85,7 +85,7 @@ pub struct TranspiledModInfo {
     pub items: Vec<String>,
     pub blocks: Vec<String>,
     pub features: Vec<String>,
-    pub port_pack: Option<crate::android_port::AndroidPortResult>,
+    pub port_pack: Option<horizon_port_pack::android_port::AndroidPortResult>,
 }
 
 /// Sanitizes a raw string into a valid Horizon mod ID (`[a-z0-9_]{1,64}`).
@@ -1021,7 +1021,7 @@ pub fn transpile_jar_to_horizon_mods_with_progress(
     profile_dir: &Path,
     progress: &dyn Fn(&str, f32),
 ) -> Result<TranspiledModInfo, String> {
-    let port_pack_res = crate::android_port::port_jar_natively(
+    let port_pack_res = horizon_port_pack::android_port::port_jar_natively(
         jar_path,
         profile_dir,
         progress,
