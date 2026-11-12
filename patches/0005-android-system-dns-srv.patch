@@ -14,7 +14,7 @@ diff --git a/crates/horizon-protocol/src/resolver/dns.rs b/crates/horizon-protoc
 +    sync::OnceLock,
      time::Duration,
  };
-@@ -11,1 +11,14 @@
+@@ -11,1 +11,16 @@
  const TYPE_SRV: u16 = 33;
 +type SystemSrvLookup = fn(&str) -> Option<Vec<u8>>;
 +static SYSTEM_SRV_LOOKUP: OnceLock<SystemSrvLookup> = OnceLock::new();
