@@ -445,7 +445,7 @@ enum Reply {
     Done(String, crate::content_files::Kind),
     PortDone(
         String,
-        Option<crate::android_port::AndroidPortResult>,
+        Option<horizon_port_pack::android_port::AndroidPortResult>,
         Vec<String>,
     ),
 }
@@ -730,7 +730,7 @@ pub struct Catalog {
     pub compiler_mode: CompilerMode,
     pub compiler_query: String,
     pub compiler_logs: Vec<String>,
-    pub last_port_result: Option<crate::android_port::AndroidPortResult>,
+    pub last_port_result: Option<horizon_port_pack::android_port::AndroidPortResult>,
     worker: Option<mpsc::Receiver<Result<Reply, String>>>,
     search_worker: Option<mpsc::Receiver<Result<Vec<Project>, String>>>,
     icon_worker: Option<mpsc::Receiver<IconData>>,
@@ -2487,7 +2487,7 @@ impl Catalog {
     /// Runs `horizon-port-pack` natively on Android from the Compiler tab's input query:
     /// - If `compiler_query` is a local path inside the profile or absolute path, ports that file directly.
     /// - Otherwise searches Modrinth for the mod/modpack slug or title, downloads the `.jar` / `.mrpack`,
-    ///   and runs `crate::android_port::port_jar_natively` + `transpile_jar_to_horizon_mods_with_progress`.
+    ///   and runs `horizon_port_pack::android_port::port_jar_natively` + `transpile_jar_to_horizon_mods_with_progress`.
     pub fn run_native_so_build(&mut self, home: &Path) {
         let game = self.config.game_home(home);
         match crate::jar_transpiler::build_native_mods_payload(&game) {
@@ -2589,7 +2589,7 @@ impl Catalog {
                     let out_dir = game.join("datapacks-upgraded").join(
                         path.file_stem().and_then(|s| s.to_str()).unwrap_or("datapack-26.3"),
                     );
-                    let lines = crate::android_port::upgrade_datapack_natively(&path, &out_dir)?;
+                    let lines = horizon_port_pack::android_port::upgrade_datapack_natively(&path, &out_dir)?;
                     logs.extend(lines);
                     return Ok(Reply::PortDone(
                         format!("Upgraded data pack into {}", out_dir.display()),
@@ -2598,7 +2598,7 @@ impl Catalog {
                     ));
                 } else if lower.ends_with(".mrpack") || mode == CompilerMode::Modpack {
                     let (pack, rows, count) =
-                        crate::android_port::port_modpack_natively(&path, &game, &report)?;
+                        horizon_port_pack::android_port::port_modpack_natively(&path, &game, &report)?;
                     logs.push(format!(
                         "Modpack: {} (MC {} • {} {})",
                         pack.name, pack.minecraft, pack.loader, pack.loader_version
@@ -2720,7 +2720,7 @@ impl Catalog {
         {
             let carry_dir = game.join("horizon-mods").join(&canon_id);
             let hmod_path = game.join("horizon-mods").join(format!("{canon_id}.hmod"));
-            let res = crate::android_port::AndroidPortResult {
+            let res = horizon_port_pack::android_port::AndroidPortResult {
                 mod_id: chk.mod_id.clone(),
                 name: chk.name.clone(),
                 version: chk.version.clone(),
@@ -2764,7 +2764,7 @@ impl Catalog {
         // Otherwise synthesize/verify the mod bundle and populate a live AndroidPortResult
         if let Ok(info) = crate::jar_transpiler::install_builtin_horizon_mod(&canon_id, &game) {
             let res = info.port_pack.unwrap_or(
-                crate::android_port::AndroidPortResult {
+                horizon_port_pack::android_port::AndroidPortResult {
                     mod_id: info.id.clone(),
                     name: info.title.clone(),
                     version: info.version.clone(),
@@ -3006,7 +3006,7 @@ pub fn install_modrinth_jar_with_port_pack(
 ) -> Result<
     (
         usize,
-        Option<crate::android_port::AndroidPortResult>,
+        Option<horizon_port_pack::android_port::AndroidPortResult>,
         Vec<String>,
     ),
     String,
@@ -3033,7 +3033,7 @@ pub fn install_modrinth_jar_with_port_pack(
             0.65,
         );
         let (pack, rows, count) =
-            crate::android_port::port_modpack_natively(&downloaded, home, progress)?;
+            horizon_port_pack::android_port::port_modpack_natively(&downloaded, home, progress)?;
         let _ = std::fs::remove_file(&downloaded);
         logs.push(format!(
             "Ported Modrinth modpack '{}' ({} mods carried over from {} files).",
@@ -3090,7 +3090,7 @@ pub fn install_modrinth_jar_with_port_pack(
     );
     let mut final_id = crate::jar_transpiler::sanitize_mod_id(&slug);
     let mut relative_final = format!("horizon-native-mods/{final_id}.hnmod");
-    let mut port_result: Option<crate::android_port::AndroidPortResult> = None;
+    let mut port_result: Option<horizon_port_pack::android_port::AndroidPortResult> = None;
     let mut verdict_str = "Ported by horizon-port-pack (.hmod + .hnmod)".to_owned();
     let mut skipped_vec = Vec::new();
     let mut namespaces_vec = vec![final_id.clone()];
