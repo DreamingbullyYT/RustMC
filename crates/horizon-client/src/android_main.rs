@@ -84,6 +84,8 @@ mod performance;
 mod platform;
 #[path = "../../../android/adapters/clipboard_ffi.rs"]
 mod clipboard_ffi;
+#[path = "../../../android/adapters/clipboard.rs"]
+mod clipboard;
 #[rustfmt::skip]
 #[allow(dead_code)]
 #[path = "../../../launcher/src/proxy.rs"]
