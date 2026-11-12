@@ -42,12 +42,12 @@ pub(super) struct Launcher {
     cursor: (f64, f64),
     mouse_down: bool,
     feedback: Option<(pages::Action, Instant)>,
-    install: Arc<Mutex<horizon_client::official_install::InstallProgress>>,
+    install: Arc<Mutex<crate::official_install::InstallProgress>>,
     install_paused: Arc<std::sync::atomic::AtomicBool>,
     install_cancelled: Arc<std::sync::atomic::AtomicBool>,
     install_transfer: crate::catalog::TransferTracker,
     pub(super) anim: pages::AnimState,
-    pub(super) control_editor: Option<horizon_client::touch::TouchControls>,
+    pub(super) control_editor: Option<crate::touch::TouchControls>,
     worker: Option<mpsc::Receiver<std::result::Result<(), String>>>,
     error: Option<String>,
     catalog: Catalog,
@@ -84,7 +84,7 @@ impl Launcher {
 
     fn edit_text(&mut self, output: horizon_client::osk::Output) {
         if let Some(tc) = &mut self.control_editor
-            && horizon_client::touch_ui::apply_editor_or_preset_output(
+            && crate::touch_ui::apply_editor_or_preset_output(
                 tc.editor.as_mut(),
                 None,
                 &output,
@@ -92,7 +92,7 @@ impl Launcher {
         {
             let game_home = self.catalog.config.game_home(&self.home);
             let _ = tc.settings.save_to(&game_home.join("horizon-touch.json"));
-            if horizon_client::touch_ui::output_dismisses(&output) {
+            if crate::touch_ui::output_dismisses(&output) {
                 crate::platform::hide();
             }
             return;
@@ -116,12 +116,12 @@ impl Launcher {
         let cleanup_home = home.clone();
         std::thread::spawn(move || {
             if let Err(error) =
-                horizon_client::official_install::cleanup_completed_downloads(&cleanup_home)
+                crate::official_install::cleanup_completed_downloads(&cleanup_home)
             {
                 log::warn!("Could not clean completed Minecraft downloads: {error}");
             }
-            if horizon_client::official_install::ready(&cleanup_home) {
-                let _ = horizon_client::android_resources::repair_structure_transforms(
+            if crate::official_install::ready(&cleanup_home) {
+                let _ = crate::android_resources::repair_structure_transforms(
                     &cleanup_home.join("engine-data.zip"),
                     &cleanup_home
                         .join(".local/horizon-client")
@@ -152,27 +152,27 @@ impl Launcher {
         crate::configure_input_mode(catalog.config.input_host);
         crate::device_runtime::configure(catalog.config.device);
         catalog.config.apply_experimental_to_game(&home);
-        horizon_client::ui_theme::set_ui_scale_percent(catalog.config.ui_scale_percent);
-        horizon_client::ui_theme::motion::set_launcher_animations_disabled(
+        crate::android_ui_theme::set_ui_scale_percent(catalog.config.ui_scale_percent);
+        crate::android_ui_theme::motion::set_launcher_animations_disabled(
             catalog.config.disable_launcher_animations,
         );
-        horizon_client::ui_theme::motion::set_game_animations_disabled(
+        crate::android_ui_theme::motion::set_game_animations_disabled(
             catalog.config.disable_game_animations,
         );
         // First run: ensure independent MCPE and GoyControl storage directories exist,
         // and initialize MCPE Controls as the default active control system on fresh installs.
         let game_home = catalog.config.game_home(&home);
-        horizon_client::touch::Settings::ensure_system_storage(
+        crate::touch::Settings::ensure_system_storage(
             &game_home,
-            horizon_client::touch::ControlStyle::Mcpe,
+            crate::touch::ControlStyle::Mcpe,
         );
-        horizon_client::touch::Settings::ensure_system_storage(
+        crate::touch::Settings::ensure_system_storage(
             &game_home,
-            horizon_client::touch::ControlStyle::GoyControl,
+            crate::touch::ControlStyle::GoyControl,
         );
         let touch_file = game_home.join("horizon-touch.json");
         if !touch_file.exists() {
-            let touch = horizon_client::touch::Settings::default_mcpe();
+            let touch = crate::touch::Settings::default_mcpe();
             if let Some(dir) = touch_file.parent() {
                 let _ = std::fs::create_dir_all(dir);
             }
@@ -276,8 +276,8 @@ impl Launcher {
         self.prepared_session = None;
         self.launching = false;
         self.launch_pending_tick = false;
-        horizon_client::discord_presence::stop();
-        horizon_client::ui_theme::reset_atlas();
+        crate::discord_presence::stop();
+        crate::android_ui_theme::reset_atlas();
         self.cursor = (0.0, 0.0);
         self.drag = None;
         self.chooser = None;
@@ -325,8 +325,8 @@ impl Launcher {
     fn open(&mut self, events: &ActiveEventLoop) -> Result<()> {
         crate::platform::set_orientation(self.catalog.config.orientation);
         self.configure_screen();
-        horizon_client::ui_theme::set_android_dpi(crate::platform::display_density());
-        horizon_client::ui_theme::set_ui_scale_percent(self.catalog.config.ui_scale_percent);
+        crate::android_ui_theme::set_android_dpi(crate::platform::display_density());
+        crate::android_ui_theme::set_ui_scale_percent(self.catalog.config.ui_scale_percent);
         crate::display::set_scale(self.catalog.config.render_scale);
         crate::android_runtime::configure_gpu(false);
         if let (Some(renderer), Some(window)) = (&mut self.renderer, &self.window) {
@@ -473,7 +473,7 @@ impl Launcher {
         );
         crate::configure_input_mode(self.catalog.config.input_host);
         crate::device_runtime::configure(self.catalog.config.device);
-        if horizon_client::official_install::ready(&self.home) {
+        if crate::official_install::ready(&self.home) {
             if !self.launching {
                 self.launching = true;
                 self.error = None;
@@ -520,7 +520,7 @@ impl Launcher {
                 }
                 return Ok(());
             }
-            horizon_client::android_resources::repair_structure_transforms(
+            crate::android_resources::repair_structure_transforms(
                 &self.home.join("engine-data.zip"),
                 &self
                     .home
@@ -540,7 +540,7 @@ impl Launcher {
                 if let Some(dir) = keypad_path.parent() {
                     std::fs::create_dir_all(dir)?;
                 }
-                horizon_client::keypad::Settings {
+                crate::keypad::Settings {
                     enabled: true,
                     ..Default::default()
                 }
@@ -643,7 +643,7 @@ impl Launcher {
             self.renderer = None;
             self.window = None;
             self.gui = None;
-            horizon_client::ui_theme::reset_atlas();
+            crate::android_ui_theme::reset_atlas();
             self.game = Some(game);
             self.game.as_mut().unwrap().resumed(events);
         } else {
@@ -670,7 +670,7 @@ impl Launcher {
             self.worker = Some(receiver);
             std::thread::spawn(move || {
                 let result =
-                    horizon_client::official_install::install_with_progress(&home, |update| {
+                    crate::official_install::install_with_progress(&home, |update| {
                         while paused.load(std::sync::atomic::Ordering::Relaxed)
                             && !cancelled.load(std::sync::atomic::Ordering::Relaxed)
                         {
@@ -685,7 +685,7 @@ impl Launcher {
                             update.done
                         };
                         *current =
-                            horizon_client::official_install::InstallProgress { done, ..update };
+                            crate::official_install::InstallProgress { done, ..update };
                     });
                 let _ = sender.send(result.map_err(|e| e.to_string()));
             });
@@ -1009,10 +1009,10 @@ impl ApplicationHandler for Launcher {
                     .is_some_and(|m| m.loading)
                 || self.anim.is_active()
                 || ({
-                    let theme = horizon_client::ui_theme::active_theme();
+                    let theme = crate::android_ui_theme::active_theme();
                     (theme.is_horizon || theme.is_nightly || theme.is_custom)
-                        && !horizon_client::ui_theme::motion::reduced_motion()
-                        && !horizon_client::ui_theme::motion::launcher_animations_disabled()
+                        && !crate::android_ui_theme::motion::reduced_motion()
+                        && !crate::android_ui_theme::motion::launcher_animations_disabled()
                 })
                 || (self.catalog.page == Page::Skins && self.wardrobe.is_animating())
                 || self
