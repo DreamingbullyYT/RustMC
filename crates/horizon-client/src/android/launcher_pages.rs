@@ -2047,7 +2047,7 @@ impl Launcher {
 
             let bundled: Vec<_> = if page == Page::Mods {
                 let query = self.catalog.query.trim().to_lowercase();
-                horizon_client::mod_list::ANDROID_BUNDLED
+                crate::android_mod_list::ANDROID_BUNDLED
                     .into_iter()
                     .filter(|(id, title, _)| {
                         query.is_empty()
@@ -2066,7 +2066,7 @@ impl Launcher {
                 .filter(|(_, p)| {
                     !(page == Page::Mods
                         && p.source == crate::browser::SourceId::Horizon
-                        && horizon_client::mod_list::ANDROID_BUNDLED
+                        && crate::android_mod_list::ANDROID_BUNDLED
                             .iter()
                             .any(|(id, _, _)| *id == p.id))
                 })
@@ -6703,7 +6703,7 @@ impl Launcher {
                 }
             }
             Some(Action::OpenBundledProject(id)) => {
-                if let Some((_, title, desc)) = horizon_client::mod_list::ANDROID_BUNDLED
+                if let Some((_, title, desc)) = crate::android_mod_list::ANDROID_BUNDLED
                     .iter()
                     .find(|(bid, _, _)| *bid == id)
                 {
@@ -7596,7 +7596,7 @@ impl Launcher {
                 if is_horizon_paged {
                     let bundled_count = if self.catalog.page == Page::Mods {
                         let query = self.catalog.query.trim().to_lowercase();
-                        horizon_client::mod_list::ANDROID_BUNDLED
+                        crate::android_mod_list::ANDROID_BUNDLED
                             .iter()
                             .filter(|(id, title, _)| {
                                 query.is_empty()
@@ -7614,7 +7614,7 @@ impl Launcher {
                         .filter(|p| {
                             !(self.catalog.page == Page::Mods
                                 && p.source == crate::browser::SourceId::Horizon
-                                && horizon_client::mod_list::ANDROID_BUNDLED
+                                && crate::android_mod_list::ANDROID_BUNDLED
                                     .iter()
                                     .any(|(id, _, _)| *id == p.id))
                         })
