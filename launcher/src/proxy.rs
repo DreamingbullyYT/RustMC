@@ -46,13 +46,20 @@ pub fn agent(builder: ureq::AgentBuilder, url: &str) -> ureq::AgentBuilder {
     }
 }
 
+fn is_socks(spec: &str) -> bool {
+    matches!(
+        spec.trim().split_once("://").map(|(scheme, _)| scheme.to_ascii_lowercase()).as_deref(),
+        Some("socks" | "socks4" | "socks4a" | "socks5" | "socks5h")
+    )
+}
+
 /// Why `spec` can't be used as a proxy, or None when it can (empty means none).
 pub fn refuse(spec: &str) -> Option<String> {
     let spec = spec.trim();
     if spec.is_empty() {
         return None;
     }
-    if horizon_port_pack::net::socks(spec) {
+    if is_socks(spec) {
         return Some(format!(
             "{} is a SOCKS proxy; Horizon downloads through an HTTP proxy, such as the \
              http:// address your proxy app also listens on.",
