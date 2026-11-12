@@ -1,12 +1,15 @@
 diff --git a/crates/horizon-client-render/src/auth.rs b/crates/horizon-client-render/src/auth.rs
 --- a/crates/horizon-client-render/src/auth.rs
 +++ b/crates/horizon-client-render/src/auth.rs
-@@ -8 +8 @@
+@@ -6,5 +6,5 @@
+ use std::{
+     path::Path,
 -    sync::{Arc, Mutex, OnceLock},
 +    sync::{Arc, Mutex},
+     time::{Duration, SystemTime},
+ };
 @@ -126,9 +126,14 @@
--static CURRENT: OnceLock<Arc<AuthSession>> = OnceLock::new();
-+static CURRENT: Mutex<Option<Arc<AuthSession>>> = Mutex::new(None);
+ static CURRENT: OnceLock<Arc<AuthSession>> = OnceLock::new();
  
  /// The account this game was started with (set once at start).
  pub fn set_current(session: AuthSession) {
