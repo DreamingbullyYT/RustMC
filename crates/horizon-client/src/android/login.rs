@@ -191,7 +191,7 @@ impl Login {
             _ => None,
         }
     }
-    pub fn edit(&mut self, field: Option<&str>, output: &horizon_client::osk::Output) -> bool {
+    pub fn edit(&mut self, field: Option<&str>, output: &crate::android_osk::Output) -> bool {
         let value = match field {
             Some("ely_username") => &mut self.username,
             Some("ely_password") => &mut self.password,
@@ -199,10 +199,10 @@ impl Login {
             _ => return false,
         };
         match output {
-            horizon_client::osk::Output::Text(text) if value.len() + text.len() <= 1024 => {
+            crate::android_osk::Output::Text(text) if value.len() + text.len() <= 1024 => {
                 value.push_str(text);
             }
-            horizon_client::osk::Output::Backspace => {
+            crate::android_osk::Output::Backspace => {
                 value.pop();
             }
             _ => {}
