@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "rustMC"
-include(":android-app", ":android-storage", ":android-updater", ":android-instances", ":android-mods")
+include(":android-app", ":android-storage", ":android-updater", ":android-instances", ":android-mods", ":android-runtime")
