@@ -199,3 +199,51 @@ device integration) must be supplied by the Android platform crate or
 narrow adapters. Do not port the fork's entire `horizon-client` package over
 the pinned upstream package, and do not replace the wgpu launcher with a new
 UI.
+
+### Original Android launcher/game lifecycle traced
+
+The original Android frontend's NativeActivity entrypoint was inspected directly
+at the source snapshot above:
+
+- `android_main(AndroidApp)` stores the `AndroidApp`, configures Android
+  services and then creates its Winit loop with
+  `EventLoop::builder().with_android_app(app.clone()).build()`.
+- That outer loop runs the original `launcher::Launcher` via
+  `run_app(&mut launcher)`. The launcher renderer is therefore a real native
+  Winit/wgpu application, not a Compose screen.
+- The launch action is separate: `android/launcher.rs` creates a
+  `game_launch::LaunchRequest`, then `android/game_launch.rs` configures
+  fork-only Android runtime graphics settings and calls
+  `crate::game::android_game(request.arguments())`. This is not the same
+  entry path as the launcher event loop.
+- The fork's `game_launch::start` returns an
+  `ApplicationHandler` for the game to be hosted by the Android frontend.
+  Its `android_game` API and runtime graphics hooks are absent from the
+  pinned upstream revision, so the game-launch bridge must be mapped
+  independently from the launcher renderer.
+
+### Updated integration consequence
+
+There are two distinct integration responsibilities, and they must not be
+collapsed into a replacement UI:
+
+1. Keep the existing Android launcher `ApplicationHandler`, renderer and
+   launcher event loop intact, adapting only its platform-service dependencies.
+2. Replace the fork-only `android_game` handoff with an upstream-compatible
+   game application handler/startup path. The upstream currently exposes
+   `entry::main_with` and `game::run_with`, which own a process-style
+   executable startup; the Android fork instead expects a game handler that
+   can be hosted by the existing Android event loop. A minimal bridge must
+   preserve the upstream hook/allocator/logging setup and avoid a second
+   Winit event loop, because Winit permits only one event loop per process.
+
+The earlier proposed "pass a prebuilt EventLoop into run_with" is therefore
+not yet proven to be the correct final seam: the Android frontend already
+owns an event loop and expects an `ApplicationHandler`, while upstream's
+current startup API internally constructs and runs its own loop. Before
+writing the patch, the next step is to trace the upstream `Loading` /
+`Split` application handler ownership and determine whether it can be
+exposed as a hosted handler without changing game/render behavior. Do not
+implement a second event loop or start the engine in a detached process.
+
+No source code or APK was changed by this audit update.
