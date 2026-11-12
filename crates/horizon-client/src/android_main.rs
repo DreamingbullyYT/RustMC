@@ -23,6 +23,8 @@ pub mod touch;
 pub mod android_resources;
 #[path = "../../../android/adapters/source/client/android_port.rs"]
 pub mod android_port;
+#[path = "../../../android/adapters/source/client/android_osk.rs"]
+pub mod android_osk;
 #[path = "../../../android/adapters/source/client/android_mod_list.rs"]
 pub mod android_mod_list;
 #[path = "../../../android/adapters/source/client/content_files.rs"]
