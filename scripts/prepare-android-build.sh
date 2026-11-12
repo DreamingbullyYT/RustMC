@@ -53,6 +53,13 @@ if text.count(anchor) != 1:
     raise SystemExit("upstream workspace member anchor changed")
 if '"crates/horizon-android"' not in text:
     text = text.replace(anchor, anchor + '    "crates/horizon-android",\n', 1)
+android_member = '    "crates/horizon-android",\n'
+if '"android/adapters/stubs/arboard"' not in text:
+    text = text.replace(
+        android_member,
+        android_member + '    "android/adapters/stubs/arboard",\n',
+        1,
+    )
 if '[patch.crates-io]' not in text:
     raise SystemExit("upstream [patch.crates-io] table is missing")
 if 'arboard = { path = "android/adapters/stubs/arboard" }' not in text:
