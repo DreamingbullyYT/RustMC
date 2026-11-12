@@ -30,6 +30,16 @@
             </intent-filter>
         </activity>
 
+
+
+        <activity
+            android:name=".game.TouchControlEditorActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:exported="false"
+            android:label="Horizon Controls"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.Horizon.Controls" />
+
         <activity
             android:name=".game.HorizonGameActivity"
             android:process=":game"

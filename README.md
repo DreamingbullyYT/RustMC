@@ -53,7 +53,7 @@ The Android launcher is deliberately separate from Horizon's desktop GPUI launch
 
 🎮 Touch controls
 
-Touch controls, the quick-settings panel and the control editor were removed from this tree. The game uses the engine's own input.
+The game runtime includes a mobile touch HUD based on the licensed Zalith Launcher 2 control components.
 
 Available controls include:
 
@@ -342,6 +342,7 @@ Licensing
 Horizon Android Edition contains multiple components with their own licensing terms.
 
 - Original Horizon work: MIT, subject to the upstream project's license and third-party notices.
+- Android touch-control components derived from Zalith Launcher 2: GPL-3.0, with the applicable additional terms/notices.
 - Fonts and other dependencies retain their own licenses.
 
 See ""HORIZON-LICENSE.txt"" (HORIZON-LICENSE.txt), ""LICENSE-ZalithLauncher2-GPL-3.0.txt"" (LICENSE-ZalithLauncher2-GPL-3.0.txt), and the other license files in the repository before redistributing builds or modified source.

@@ -384,6 +384,10 @@ impl Game<'_> {
     }
 
     pub(super) fn draw_android_touch_controls(&self, batch: &mut HudBatch) {
+        // Horizon's Kotlin Zalith LayerController owns touch visuals when enabled.
+        if std::env::var_os("HORIZON_ANDROID_ZALITH_CONTROLS").is_some() {
+            return;
+        }
         if !cfg!(target_os = "android")
             || self.screen != Screen::Playing
             || self.title.is_some()
@@ -395,6 +399,68 @@ impl Game<'_> {
         let alpha = (self.android_touch.opacity * 145.0) as u8;
         let radius = 24.0 * self.android_touch.button_size;
         let white = &self.gui.atlas;
+        if self.android_touch.quick_settings_open {
+            let x = w * 0.84;
+            batch.fill(
+                white,
+                x - 0.14 * w,
+                h * 0.13,
+                0.14 * w,
+                h * 0.41,
+                rgba(18, 23, 31, 220),
+            );
+        }
+        {
+            let mut button = |x: f32, y: f32, label: &str, scale: f32| {
+                let r = radius * scale;
+                batch.fill(
+                    white,
+                    x - r,
+                    y - r,
+                    r * 2.0,
+                    r * 2.0,
+                    rgba(25, 30, 38, alpha),
+                );
+                let text_width = HudBatch::text_width(&self.gui.atlas, label);
+                batch.text(
+                    &self.gui.atlas,
+                    label,
+                    x - text_width / 2.0,
+                    y - 4.0,
+                    rgba(255, 255, 255, 220),
+                    true,
+                );
+            };
+            // Zalith-style in-game quick access: this remains available when the
+            // virtual HUD is hidden so players can restore it without reopening
+            // launcher settings.
+            button(w * 0.95, h * 0.08, "SET", 0.82);
+            if self.android_touch.quick_settings_open {
+                button(
+                    w * 0.78,
+                    h * 0.20,
+                    if self.android_touch.hud_visible {
+                        "HUD ON"
+                    } else {
+                        "HUD OFF"
+                    },
+                    0.85,
+                );
+                button(
+                    w * 0.78,
+                    h * 0.29,
+                    if self.android_touch.auto_jump {
+                        "JUMP ON"
+                    } else {
+                        "JUMP OFF"
+                    },
+                    0.85,
+                );
+                button(w * 0.75, h * 0.39, "LOOK-", 0.75);
+                button(w * 0.88, h * 0.39, "LOOK+", 0.75);
+                button(w * 0.82, h * 0.49, "DONE", 0.75);
+            }
+        }
         if !self.android_touch.enabled || !self.android_touch.hud_visible {
             return;
         }
@@ -477,6 +543,25 @@ impl Game<'_> {
                 let ny = point.1 / h;
                 let centers = self.touch_control_centres(w as f32, h as f32);
                 let mut role = None;
+                if self.android_touch.quick_settings_open
+                    && (0.64..=0.98).contains(&nx)
+                    && (0.14..=0.54).contains(&ny)
+                {
+                    role = Some(if ny < 0.25 {
+                        AndroidTouchRole::QuickHud
+                    } else if ny < 0.34 {
+                        AndroidTouchRole::QuickAutoJump
+                    } else if ny < 0.45 && nx < 0.82 {
+                        AndroidTouchRole::QuickSensitivity(-0.1)
+                    } else if ny < 0.45 {
+                        AndroidTouchRole::QuickSensitivity(0.1)
+                    } else {
+                        AndroidTouchRole::QuickClose
+                    });
+                }
+                if role.is_none() && nx > 0.90 && ny < 0.14 {
+                    role = Some(AndroidTouchRole::QuickSettings);
+                }
                 if role.is_none()
                     && (!self.android_touch.enabled || !self.android_touch.hud_visible)
                 {
@@ -752,6 +837,7 @@ impl Game<'_> {
     fn android_translate_touch(&mut self, event_loop: &dyn EventLoopCtl, touch: winit::event::Touch) -> Option<WindowEvent> {
         Some({
                 if cfg!(target_os = "android")
+                    && std::env::var_os("HORIZON_ANDROID_ZALITH_CONTROLS").is_none()
                     && self.android_touch.enabled
                     && self.screen == Screen::Playing
                     && self.title.is_none()
