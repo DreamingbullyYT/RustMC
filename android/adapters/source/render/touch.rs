@@ -28,10 +28,13 @@ pub fn set_current_hud_opacity_scale(scale: f32) {
     LAST_HUD_OPACITY_BITS.store(clamped.to_bits(), Ordering::Relaxed);
 }
 
+#[path = "touch/custom.rs"]
 pub mod custom;
+#[path = "touch/editor.rs"]
 pub mod editor;
 pub use custom::CustomButton;
 pub use editor::{Editor, EditorDragKind, PickerStep};
+#[path = "touch/layout.rs"]
 pub mod layout;
 pub use layout::{
     Control, ControlStyle, JoystickMoveArea, JoystickStyle, Mode, Placement, PresetMeta, Settings,
