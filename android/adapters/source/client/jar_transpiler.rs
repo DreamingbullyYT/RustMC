@@ -2911,9 +2911,8 @@ pub fn build_native_mods_payload(profile_dir: &Path) -> Result<(Vec<u8>, serde_j
         if !seen_ids.insert(id.clone()) {
             continue;
         }
-        for p in &bundle.manifest.permissions {
-            permissions.insert(p.clone());
-        }
+        // Upstream native manifests do not define Android permissions; do not
+        // extend that schema just for the adapter.
         let bytes = fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         body.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
         body.extend_from_slice(&bytes);
