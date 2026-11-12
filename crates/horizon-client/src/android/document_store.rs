@@ -750,9 +750,9 @@ pub fn sync_mods_folder(profile_root: &Path) {
             let _lower = name_str.to_ascii_lowercase();
             #[cfg(target_os = "android")]
             if _lower.ends_with(".jar") {
-                let _ = horizon_client::jar_transpiler::transpile_jar_to_horizon_mods(&path, profile_root);
+                let _ = crate::jar_transpiler::transpile_jar_to_horizon_mods(&path, profile_root);
             } else if _lower.ends_with(".hnmod") {
-                let _ = horizon_client::jar_transpiler::compile_hnmod_bundle_realtime(&path, profile_root);
+                let _ = crate::jar_transpiler::compile_hnmod_bundle_realtime(&path, profile_root);
             }
         }
     }
@@ -768,7 +768,7 @@ pub fn sync_mods_folder(profile_root: &Path) {
                 let _lower = name_str.to_ascii_lowercase();
                 #[cfg(target_os = "android")]
                 if _lower.ends_with(".jar") {
-                    if horizon_client::jar_transpiler::transpile_jar_to_horizon_mods(&path, profile_root).is_ok() {
+                    if crate::jar_transpiler::transpile_jar_to_horizon_mods(&path, profile_root).is_ok() {
                         let _ = fs::remove_file(&path);
                     }
                 }
