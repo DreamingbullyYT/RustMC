@@ -6,7 +6,7 @@
 //! on Android without spawning external desktop CLI processes, and packages the carried-over
 //! folder mod into both `<profile>/horizon-mods/<id>/` and `<profile>/horizon-mods/<id>.hmod`.
 
-use horizon_port_pack::{
+use crate::{
     carry,
     check::{self, Check, Verdict},
     events, import, jar, pipeline, report, upgrade,
@@ -153,8 +153,8 @@ pub fn port_jar_natively(
         .map(str::to_owned)
         .collect();
 
-    // The upstream carry report is intentionally not Deserialize: keep this adapter
-    // on the stable JSON fields it needs rather than adding derives to the engine crate.
+    // The upstream carry report is intentionally not Deserialize: consume only
+    // the stable JSON fields this Android summary needs.
     let carry_report: Option<serde_json::Value> =
         pipeline::read_json(&port_work_dir.join("carry-report.json")).ok();
     let (blocks_ported, items_ported, recipes_upgraded, loot_tables_upgraded, worldgen_ported) =
@@ -271,7 +271,7 @@ pub fn port_modpack_natively(
             }
         }
     }
-    let _ = horizon_port_pack::resourcepacks::install(&work_dir, profile_dir);
+    let _ = crate::resourcepacks::install(&work_dir, profile_dir);
     progress(
         &format!(
             "horizon-port-pack: Ported {} mod(s) from {}",
