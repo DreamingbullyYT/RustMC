@@ -101,6 +101,52 @@ replace_once(
         let Some(mut o) = Self::parse(args)""",
 )
 
+# Winit does not expose KeyEventExtModifierSupplement on Android. Layout learning
+# is a desktop-only convenience; preserve desktop behavior and no-op only this
+# optional helper on Android.
+replace_once(
+    "crates/horizon-client-input/src/keybinds.rs",
+    """pub fn learn_layout(event: &winit::event::KeyEvent) {
+    use winit::keyboard::{Key, PhysicalKey};
+    use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
+    let PhysicalKey::Code(code) = event.physical_key else {
+        return;
+    };
+    let Some(name) = key_name(code) else {
+        return;
+    };
+    let learn = horizon_client_core::key_display::learn_layout;
+    match event.key_without_modifiers() {
+        Key::Character(text) => learn(name, &text),
+        Key::Dead(Some(c)) => learn(name, c.encode_utf8(&mut [0; 4])),
+        _ => {}
+    }
+}""",
+    """pub fn learn_layout(event: &winit::event::KeyEvent) {
+    #[cfg(target_os = "android")]
+    {
+        let _ = event;
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        use winit::keyboard::{Key, PhysicalKey};
+        use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
+        let PhysicalKey::Code(code) = event.physical_key else {
+            return;
+        };
+        let Some(name) = key_name(code) else {
+            return;
+        };
+        let learn = horizon_client_core::key_display::learn_layout;
+        match event.key_without_modifiers() {
+            Key::Character(text) => learn(name, &text),
+            Key::Dead(Some(c)) => learn(name, c.encode_utf8(&mut [0; 4])),
+            _ => {}
+        }
+    }
+}""",
+)
+
 # 3. Factor only the existing Loading handler construction out of run_loading.
 # Desktop still creates/runs its own EventLoop and performs its original cleanup.
 resource_path = "crates/horizon-client/src/game/resource_loader.rs"
