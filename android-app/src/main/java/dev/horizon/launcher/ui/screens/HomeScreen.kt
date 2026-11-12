@@ -20,6 +20,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import dev.horizon.launcher.GameSetup
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,6 +39,16 @@ import dev.horizon.launcher.ui.theme.HorizonColors
 
 @Composable
 fun HomeScreen(modifier: Modifier = Modifier, coreStatus: String = "Core not initialized") {
+    val context = LocalContext.current
+    var gameReady by remember { mutableStateOf(false) }
+    var installing by remember { mutableStateOf(false) }
+    var installStatus by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(coreStatus) {
+        gameReady = coreStatus.contains("connected") && runCatching { GameSetup.ready() }.getOrDefault(false)
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -73,20 +92,49 @@ fun HomeScreen(modifier: Modifier = Modifier, coreStatus: String = "Core not ini
             ) {
                 Text("SELECTED INSTANCE", color = HorizonColors.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                 Text("Minecraft", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                Text("No game profile is installed yet", color = HorizonColors.TextMuted, fontSize = 13.sp)
+                Text(if (gameReady) "Minecraft is installed and ready" else "Minecraft is not installed yet", color = HorizonColors.TextMuted, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     InfoPill("VANILLA")
                     InfoPill("ARM64")
                     InfoPill("VULKAN")
                 }
                 Button(
-                    onClick = {},
-                    enabled = false,
+                    onClick = {
+                        if (gameReady) {
+                            GameSetup.play(context).onFailure { installStatus = "Could not open game: ${it.message}" }
+                        } else {
+                            scope.launch {
+                                installing = true
+                                installStatus = "Preparing Minecraft installation…"
+                                try {
+                                    GameSetup.install(context) { installStatus = it }
+                                    gameReady = GameSetup.ready()
+                                    installStatus = if (gameReady) "Minecraft is ready to play." else "Install finished, but Minecraft is not ready."
+                                } catch (error: Throwable) {
+                                    installStatus = "Install failed: ${error.message ?: error.javaClass.simpleName}"
+                                } finally {
+                                    installing = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = coreStatus.contains("connected") && !installing,
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(disabledContainerColor = Color(0xFF343B4D))
                 ) {
-                    Text("PLAY  ·  RUNTIME NOT CONNECTED", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(
+                        when {
+                            installing -> "INSTALLING…"
+                            gameReady -> "PLAY"
+                            else -> "INSTALL MINECRAFT"
+                        },
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+                if (installStatus.isNotBlank()) {
+                    Text(installStatus, color = HorizonColors.TextMuted, fontSize = 11.sp)
                 }
             }
         }

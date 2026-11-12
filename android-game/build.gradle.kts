@@ -25,6 +25,7 @@ android {
 
 dependencies {
     implementation(project(":android-runtime"))
+    implementation(project(":android-core"))
     implementation(project(":zalith:LayerController"))
     implementation(project(":zalith:ControlEditor"))
     implementation(platform("androidx.compose:compose-bom:2024.09.03"))

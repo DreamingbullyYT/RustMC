@@ -2,6 +2,8 @@ package dev.horizon.launcher
 
 import android.os.Bundle
 import java.io.File
+import dev.horizon.launcher.data.Updater
+import java.io.File
 import dev.horizon.launcher.data.Core
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -33,10 +35,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val home = File(filesDir, "launcher").apply { mkdirs() }
-        val initError = Core.init(home.absolutePath)
-        coreStatus = if (initError != null) "Core error: $initError"
-            else if (Core.loadError != null) "Core unavailable: ${Core.loadError}"
-            else "Core ${Core.coreVersion()} connected"
+        val setupError = runCatching {
+            Updater.prepare(filesDir, this)
+            val gameHome = File(home, "game").apply { mkdirs() }
+            val resourceError = runCatching { Updater.syncEngineData(this, gameHome) }.exceptionOrNull()?.message
+            Core.init(home.absolutePath) ?: resourceError
+        }.getOrElse { it.message ?: it.javaClass.simpleName }
+        Updater.armGuard(filesDir, "launcher")
+        coreStatus = when {
+            Core.loadError != null -> "Core unavailable: ${Core.loadError}"
+            setupError != null -> "Core setup error: $setupError"
+            else -> "Core ${Core.coreVersion()} connected"
+        }
         setContent { HorizonApp(coreStatus) }
     }
 }
