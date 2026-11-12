@@ -436,7 +436,7 @@ pub fn enable_mod_in_profile(profile_dir: &Path, mod_id: &str) {
         return;
     }
     let mut roots = vec![profile_dir.to_path_buf()];
-    let home = crate::logging::private_home();
+    let home = crate::backend::data_dir();
     if !roots.iter().any(|r| r == &home) {
         roots.push(home);
     }
