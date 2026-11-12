@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the minimal hosted-ApplicationHandler API to the pinned upstream tree."""
+"""Apply the smallest upstream API seam needed to host Horizon on Android's Winit loop."""
 from pathlib import Path
 import sys
 
@@ -15,12 +15,26 @@ def replace_once(path: str, old: str, new: str) -> None:
     file.write_text(source.replace(old, new, 1), encoding="utf-8")
 
 
+# 1. Extract ALL one-time engine/mod hook registration from the executable entry.
+# Android supplies its own logger and lifecycle, but it must not skip upstream
+# renderer, data-load, worldgen, client, sound, allocator, or mod registrations.
 entry_path = "crates/horizon-client/src/entry.rs"
 entry = ROOT / entry_path
 source = entry.read_text(encoding="utf-8")
-anchor = "/// Start the game with trait mods in dispatch order.\npub fn main_with(mods: crate::mod_api::Mods) {"
-helper = """// Shared initialization for the executable and frontends that host the game's
-// ApplicationHandler on an event loop they already own.
+main_marker = "pub fn main_with(mods: crate::mod_api::Mods) {"
+main_start = source.index(main_marker) + len(main_marker)
+args_marker = "    let args: Vec<String> = std::env::args().skip(1).collect();"
+args_start = source.index(args_marker, main_start)
+initialization = source[main_start:args_start]
+if "crate::mod_api::MODS.set(mods)" not in initialization:
+    raise SystemExit("entry.rs: initialization block no longer contains MODS registration")
+if "native_client_hooks::install" not in initialization:
+    raise SystemExit("entry.rs: initialization block changed; native client hooks were not found")
+if "sound_engine::install_playback_hook" not in initialization:
+    raise SystemExit("entry.rs: initialization block changed; sound hook was not found")
+helper = """
+// Shared one-time setup for the executable and native frontends which host
+// the game's ApplicationHandler on an event loop they already own.
 static HOSTED_INITIALIZED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 
 pub fn initialize_for_hosted_application(mods: crate::mod_api::Mods) {
@@ -28,35 +42,28 @@ pub fn initialize_for_hosted_application(mods: crate::mod_api::Mods) {
         log::warn!("Horizon engine initialization already ran; ignoring the second call");
         return;
     }
-    if crate::mod_api::MODS.set(mods).is_err() {
-        log::warn!("Trait mods already installed; ignoring the second list");
-    }
-    horizon_threads::configure_allocator();
-    crate::horizon_look::give();
-    horizon_client::pack_formats::install();
-    if !cfg!(feature = "horizon-extras") {
-        horizon_client::options_ui::HORIZON_EXTRAS
-            .store(false, std::sync::atomic::Ordering::Relaxed);
-    }
-    horizon_client::telemetry::mark_start();
-    crash::on_report(horizon_client::telemetry::keep_crash);
-    game::player_hooks::register();
-    horizon_hooks::engine::seal();
-    horizon_client::lang::install_crate_files(horizon_hooks::lang::engine::all());
-    horizon_client::spans::startup::init(std::time::Instant::now());
-    horizon_client::spans::trace::start_from_env();
+""" + initialization + """    logging::set_line_hook(crate::native_client_hooks::native_log_line);
+    raise_open_file_limit();
 }
 
 """
+anchor = "/// Start the game with trait mods in dispatch order.\npub fn main_with(mods: crate::mod_api::Mods) {"
 if source.count(anchor) != 1:
-    raise SystemExit(f"{entry_path}: hosted initialization insertion anchor changed")
+    raise SystemExit("entry.rs: main_with insertion anchor changed")
 source = source.replace(anchor, helper + anchor, 1)
-start = source.index("    // First: a trait injection into anything below")
-end_marker = "    horizon_client::spans::trace::start_from_env();\n"
-end = source.index(end_marker, start) + len(end_marker)
-source = source[:start] + "    initialize_for_hosted_application(mods);\n" + source[end:]
+# The helper now owns the extracted block; leave CLI parsing and process policy in main_with.
+source = source[:main_start] + "\n    initialize_for_hosted_application(mods);\n" + source[args_start:]
+# These were moved to the helper. Avoid running them twice in desktop main_with.
+for line in (
+    "    logging::set_line_hook(crate::native_client_hooks::native_log_line);\n",
+    "    raise_open_file_limit();\n",
+):
+    if source.count(line) != 1:
+        raise SystemExit(f"entry.rs: expected one remaining moved call: {line.strip()}")
+    source = source.replace(line, "", 1)
 entry.write_text(source, encoding="utf-8")
 
+# 2. Let a native frontend supply explicit launch arguments instead of process argv.
 replace_once(
     "crates/horizon-client/src/game/launch_options.rs",
     """    pub(super) fn read() -> Result<Option<Self>> {
@@ -68,6 +75,8 @@ replace_once(
         let Some(mut o) = Self::parse(args)""",
 )
 
+# 3. Factor only the existing Loading handler construction out of run_loading.
+# Desktop still creates/runs its own EventLoop and performs its original cleanup.
 resource_path = "crates/horizon-client/src/game/resource_loader.rs"
 resource = ROOT / resource_path
 source = resource.read_text(encoding="utf-8")
@@ -77,6 +86,8 @@ app_start = source.index("    let mut app = App::Loading(Box::new(loading));", c
 end_marker = "    Ok(())\n}"
 run_end = source.index(end_marker, app_start) + len(end_marker)
 constructor = source[construct_start:app_start]
+if "let loading = Loading {" not in constructor:
+    raise SystemExit("resource_loader.rs: loading constructor changed")
 factory = """
 /// Construct the existing loading/game handler without creating a Winit event loop.
 pub(super) fn loading_app(
@@ -90,15 +101,18 @@ pub(super) fn loading_app(
 }
 """
 if "pub(super) fn loading_app(" in source:
-    raise SystemExit(f"{resource_path}: loading_app already exists")
+    raise SystemExit("resource_loader.rs: loading_app already exists")
 source = source[:run_end] + "\n\n" + factory + source[run_end:]
 resource.write_text(source, encoding="utf-8")
 
+# 4. Add the hosted-client factory next to run_with. It mirrors run_with's
+# client setup, but returns the same upstream App handler rather than nesting
+# a second EventLoop inside Android's existing launcher loop.
 game_path = "crates/horizon-client/src/game.rs"
-factory = """/// Prepare the normal client launch and return its existing application handler.
+factory = """/// Prepare the normal windowed client launch and return its existing handler.
 ///
-/// A native frontend can host this handler on its own Winit event loop. This
-/// deliberately does not create an EventLoop or change the desktop launch path.
+/// A native frontend hosts this handler on its own Winit event loop. The
+/// desktop run_with() path remains unchanged.
 pub fn create_application_handler(
     arguments: Vec<String>,
 ) -> Result<Box<dyn winit::application::ApplicationHandler>> {
@@ -112,7 +126,7 @@ pub fn create_application_handler(
         return Err("synchronous startup is not supported by the hosted application API".into());
     }
 
-    // Install the same game hooks as run_with before any game or loader worker starts.
+    // Same gameplay hooks and thread priority as the ordinary client launch.
     let _ = horizon_client::lan::conn::SERVER_PACKET.set(Game::native_server_packet);
     let _ = horizon_client::lan::conn::ENTITY_DATA_TO.set(Game::native_entity_data_to);
     let _ = horizon_client::health::HURT_SERVER.set(native_hooks::hurt_server);
@@ -143,12 +157,14 @@ pub fn create_application_handler(
     {
         return Err(error.into());
     }
-    let version = horizon_client::telemetry::version();
-    let game_dir = horizon_client::logging::player_dir();
-    horizon_hooks::engine::started(&horizon_hooks::Started::new(&version, &game_dir));
+    horizon_hooks::engine::started(&horizon_hooks::Started::new(
+        &horizon_client::telemetry::version(),
+        &horizon_client::logging::player_dir(),
+    ));
     mods::register_components(&vanilla_root)?;
     mods::register_standalone_models();
     mods::register_layer_definitions();
+
     let mut early_settings = Settings::load(&Game::options_path());
     horizon_client::packs::set_polytone_choices(horizon_client::packs::load_polytone_choices(
         &horizon_client::packs::polytone_choices_file(),
@@ -164,11 +180,11 @@ pub fn create_application_handler(
     narrator::start(&early_settings);
     activity::client_started(&options);
     Behaviours::set_cache_dir(std::env::current_dir()?.join(".horizon-cache"));
+
     let app = resource_loader::loading_app(options, early_settings, vanilla_root, None, started)?;
     Ok(Box::new(app))
 }
 
 """
 replace_once(game_path, "pub fn run_with() -> Result<()> {", factory + "pub fn run_with() -> Result<()> {")
-
-print("Hosted Android application API patch applied.")
+print("Updated strict upstream patcher.")
