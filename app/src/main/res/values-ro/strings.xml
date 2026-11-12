@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">Ferrite</string>
+    <string name="tab_play">Joacă</string>
+    <string name="tab_controls">Controale</string>
+    <string name="tab_mods">Moduri</string>
+    <string name="tab_logs">Jurnale</string>
+    <string name="new_instance">Instanță nouă</string>
+    <string name="play">Joacă</string>
+    <string name="backup">Backup lumi</string>
+    <string name="delete">Șterge</string>
+    <string name="search">Caută</string>
+    <string name="analyze">Analizează jurnalul</string>
+    <string name="paste_log">Lipește aici jurnalul jocului</string>
+    <string name="no_instances">Nu ai nicio instanță încă</string>
+    <string name="overlaps">Butoane suprapuse: %1$d</string>
+    <string name="game_missing">Aplicația engine Horizon nu este instalată</string>
+</resources>

@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">Ferrite</string>
+    <string name="tab_play">Play</string>
+    <string name="tab_controls">Controls</string>
+    <string name="tab_mods">Mods</string>
+    <string name="tab_logs">Logs</string>
+    <string name="new_instance">New instance</string>
+    <string name="play">Play</string>
+    <string name="backup">Backup worlds</string>
+    <string name="delete">Delete</string>
+    <string name="search">Search</string>
+    <string name="analyze">Analyze log</string>
+    <string name="paste_log">Paste a game log here</string>
+    <string name="no_instances">No instances yet</string>
+    <string name="overlaps">Overlapping buttons: %1$d</string>
+    <string name="game_missing">The Horizon engine app is not installed</string>
+</resources>

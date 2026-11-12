@@ -1,9 +1,4 @@
-/target/
-/.local/
-/.gradle/
-/android/.gradle/
-/android/**/build/
+build/
+.gradle/
+local.properties
 *.apk
-*.aab
-*.keystore
-*.jks
