@@ -23,8 +23,12 @@ class UpstreamPinTests(unittest.TestCase):
         script = (ROOT / "scripts/checkout-upstream.sh").read_text(encoding="utf-8")
         self.assertIn('git -C "$DEST" fetch --quiet --depth 1 origin "$COMMIT"', script)
         self.assertIn("HEAD^{tree}", script)
-        self.assertIn("git apply --check", script)
         self.assertIn("UPSTREAM.lock", script)
+        self.assertIn("name '*.py'", script)
+        self.assertIn('python3 "$patcher" "$DEST"', script)
+        patcher = ROOT / "patches/0001-hosted-android-application-handler.py"
+        self.assertTrue(patcher.is_file())
+        self.assertIn("create_application_handler", patcher.read_text(encoding="utf-8"))
 
     def test_original_android_source_is_present(self):
         for path in (
