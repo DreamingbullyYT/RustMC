@@ -54,7 +54,9 @@ jobs:
         run: |
           rustup toolchain install 1.95.0 --profile minimal --target aarch64-linux-android
           rustup default 1.95.0
-      - name: Fetch exact upstream source for this build
+      - name: Fetch exact upstream source for this build (Android Vulkan FIFO diagnostic)
+        env:
+          HORIZON_ANDROID_VULKAN_FIFO_TEST: "1"
         run: ./scripts/checkout-upstream.sh "$RUNNER_TEMP/horizon"
       - name: Overlay original Android application
         run: ./scripts/prepare-android-build.sh "$RUNNER_TEMP/horizon"
