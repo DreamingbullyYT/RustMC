@@ -23,7 +23,7 @@ pub fn loading_renderer(
     window: Arc<Window>,
     offscreen: bool,
     atlas: Option<&HudAtlas>,
-    panorama: Option<&crate::horizon_client_adapter::gfx::panorama::Faces>,
+    panorama: Option<&Arc<crate::horizon_client_adapter::gfx::panorama::Faces>>,
     previous: Option<&Renderer>,
     api: GraphicsApi,
 ) -> Result<Renderer> {
@@ -31,7 +31,7 @@ pub fn loading_renderer(
     static EMPTY_HUD: [u8; 4] = [0, 0, 0, 255];
     static EMPTY_GLINT: [u8; 4] = [0; 4];
     let empty_panorama = crate::horizon_client_adapter::gfx::panorama::Faces::colour([96, 110, 111, 255]);
-    let panorama = panorama.unwrap_or(&empty_panorama);
+    let panorama = panorama.cloned().unwrap_or_else(|| Arc::new(empty_panorama));
     let (pixels, width, height) = atlas.map_or((EMPTY_HUD.as_slice(), 1, 1), |a| {
         (a.pixels.as_slice(), a.width, a.height)
     });
