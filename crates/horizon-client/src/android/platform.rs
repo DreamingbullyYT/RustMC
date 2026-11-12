@@ -1,5 +1,5 @@
 //! Android system input and platform services, called from the Rust client.
-use horizon_client::osk::Output;
+use crate::android_osk::Output;
 use jni::{
     JNIEnv, JavaVM,
     objects::{GlobalRef, JObject, JValue},
