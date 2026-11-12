@@ -4,7 +4,7 @@ use super::{
     pages::{Action, button},
 };
 use crate::catalog::RendererMode;
-use horizon_client::ui_theme::{Face, Ui};
+use crate::android_ui_theme::{Face, Ui};
 
 pub(super) enum Kind {
     Aspect,
