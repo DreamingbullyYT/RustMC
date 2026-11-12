@@ -356,7 +356,7 @@ impl Config {
             settings.horizon.upload_budget_kib = 2048;
         }
         settings.horizon.cave_culling = true;
-        settings.horizon.entity_culling = true;
+        settings.horizon.entity_culling = horizon_client::graphics::EntityCullingMode::Asynchronous;
         settings.horizon.resolution_scale = self.render_scale.percent().clamp(25, 100);
         match self.renderer {
             RendererMode::OpenGl => {
