@@ -1,7 +1,7 @@
 diff --git a/crates/horizon-port-pack/src/lib.rs b/crates/horizon-port-pack/src/lib.rs
 --- a/crates/horizon-port-pack/src/lib.rs
 +++ b/crates/horizon-port-pack/src/lib.rs
-@@ -4,4 +4,5 @@
+@@ -4,5 +4,6 @@
  //! Every step reads and writes files in a work folder (`pipeline`), so it can
  //! be rerun, resumed and inspected. The work folder belongs to the user: the
  //! jars they downloaded and what is carried over from them stay there and
