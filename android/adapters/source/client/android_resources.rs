@@ -135,7 +135,7 @@ pub fn controls_with_progress(root: &Path, progress: impl Fn(u64, u64)) -> Resul
     use sha2::{Digest, Sha256};
     use std::io::Read;
     let manifest: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../packaging/android/bedrock-controls.json"
+        "../../../../packaging/android/bedrock-controls.json"
     ))?;
     let revision = manifest["revision"]
         .as_str()

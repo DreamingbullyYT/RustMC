@@ -17,7 +17,7 @@ use std::{
 mod cache_input;
 
 const CATALOG: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
-const LOCK: &str = include_str!("../../../research-lock.json");
+const LOCK: &str = include_str!("../../../../research-lock.json");
 static INSTALLATION: Mutex<()> = Mutex::new(());
 static DOWNLOAD_CACHE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
