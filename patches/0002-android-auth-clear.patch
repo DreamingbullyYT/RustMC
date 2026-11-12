@@ -4,7 +4,7 @@ diff --git a/crates/horizon-client-render/src/auth.rs b/crates/horizon-client-re
 @@ -8 +8 @@
 -    sync::{Arc, Mutex, OnceLock},
 +    sync::{Arc, Mutex},
-@@ -126,9 +126,13 @@
+@@ -126,9 +126,14 @@
 -static CURRENT: OnceLock<Arc<AuthSession>> = OnceLock::new();
 +static CURRENT: Mutex<Option<Arc<AuthSession>>> = Mutex::new(None);
  
