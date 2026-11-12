@@ -1047,7 +1047,7 @@ impl Catalog {
             }
         }
         // Include enabled built-in Horizon mods (ANDROID_BUNDLED) in Installed > Mods.
-        for &(b_id, b_title, b_desc) in &horizon_client::mod_list::ANDROID_BUNDLED {
+        for &(b_id, b_title, b_desc) in &crate::android_mod_list::ANDROID_BUNDLED {
             if on.enabled.contains(b_id) && !on.disabled.contains(b_id) {
                 let b_file = format!("builtin:{b_id}");
                 if !self.local.iter().any(|item| item.file == b_file) {
@@ -1605,7 +1605,7 @@ impl Catalog {
         // Collect candidate icon tasks, prioritizing currently visible page items first!
         let mut raw_tasks: Vec<(String, String, Option<String>, Kind, browser::SourceId)> = Vec::new();
         if self.page == Page::Mods {
-            for (id, title, _) in horizon_client::mod_list::ANDROID_BUNDLED {
+            for (id, title, _) in crate::android_mod_list::ANDROID_BUNDLED {
                 if !self.icons.contains_key(id) {
                     raw_tasks.push((
                         id.to_owned(),
@@ -2001,7 +2001,7 @@ impl Catalog {
                 items.len()
             )
         } else if self.page == Page::Mods {
-            let bundled_matches = horizon_client::mod_list::ANDROID_BUNDLED
+            let bundled_matches = crate::android_mod_list::ANDROID_BUNDLED
                 .iter()
                 .filter(|(id, title, _)| {
                     let q = self.query.trim().to_lowercase();
@@ -2065,7 +2065,7 @@ impl Catalog {
                     .map(|w| w.to_lowercase())
                     .collect();
                 for (id, title, summary, downloads) in crate::jar_transpiler::all_horizon_catalog_mods() {
-                    if horizon_client::mod_list::ANDROID_BUNDLED
+                    if crate::android_mod_list::ANDROID_BUNDLED
                         .iter()
                         .any(|(bid, _, _)| *bid == id)
                         || combined.iter().any(|p| p.id == id)
