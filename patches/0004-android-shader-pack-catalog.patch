@@ -1,0 +1,8 @@
+diff --git a/crates/horizon-shader-api/src/package.rs b/crates/horizon-shader-api/src/package.rs
+--- a/crates/horizon-shader-api/src/package.rs
++++ b/crates/horizon-shader-api/src/package.rs
+@@ -259,3 +259,4 @@
+     }
+     Ok(())
+ }
++include!("../../../android/adapters/source/client/android_shader_packs.rs");
