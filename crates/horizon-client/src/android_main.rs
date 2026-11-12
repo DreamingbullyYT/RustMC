@@ -21,8 +21,6 @@ pub mod keypad;
 pub mod touch;
 #[path = "../../../android/adapters/source/client/android_resources.rs"]
 pub mod android_resources;
-#[path = "../../../android/adapters/source/client/android_port.rs"]
-pub mod android_port;
 #[path = "../../../android/adapters/source/client/android_osk.rs"]
 pub mod android_osk;
 #[path = "../../../android/adapters/source/client/android_mod_list.rs"]
