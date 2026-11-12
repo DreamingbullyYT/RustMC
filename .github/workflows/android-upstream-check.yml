@@ -1,0 +1,40 @@
+name: Android source and upstream checks
+
+on:
+  push:
+    branches: [horizon-android-port]
+    paths:
+      - 'android/**'
+      - 'crates/**'
+      - 'launcher/**'
+      - 'packaging/android/**'
+      - 'patches/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'UPSTREAM.lock'
+      - '.github/workflows/android-upstream-check.yml'
+  pull_request:
+    branches: [horizon-android-port]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-upstream-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-and-upstream:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check patch formatting
+        run: git diff --check
+      - name: Test source import and pinned revision policy
+        run: python3 -m unittest discover -s tests -p 'test_upstream_pin.py' -v
+      - name: Fetch exact upstream source for this build
+        run: ./scripts/checkout-upstream.sh "$RUNNER_TEMP/horizon"
+      - name: Verify exact upstream and patch series
+        run: ./scripts/verify-upstream.sh

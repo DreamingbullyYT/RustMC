@@ -1,46 +1,47 @@
 # Architecture and change policy
 
+## Source ownership
+
+- `packaging/android/`: original Android Gradle project, manifest, resources and Java adapters.
+- `crates/horizon-android/`: original NativeActivity `cdylib` package.
+- `crates/horizon-client/src/android*/`: imported Android entry, launcher, platform and lifecycle source.
+- `android/modules/`: new compatibility adapters where code can be separated cleanly.
+- `patches/*.patch`: the only tracked modifications to upstream engine source.
+- `.local/upstream/horizon/`: disposable build-time checkout of the exact upstream source; never committed.
+
+## Build-time upstream
+
+Horizon is not a submodule and is not vendored in this repository. The
+`UPSTREAM.lock` file pins repository, commit and tree. `scripts/checkout-upstream.sh`
+fetches that exact revision into `.local/upstream/horizon`, verifies both
+hashes, and applies the ordered patch series. GitHub Actions runs the same
+script before integration checks and, once enabled, APK builds.
+
 ## Dependency direction
 
 ```text
-android/app          Android application, manifest and system bridges
-       |
-android/native      Rust Android entry point and JNI/native boundary
-       |
-android/modules     input, lifecycle, storage, graphics and mod integration
-       |
-upstream/horizon    pinned, unmodified upstream engine
+Original Android launcher / renderer
+             |
+Separate Android compatibility adapters
+             |
+Pinned upstream Horizon public APIs
+             |
+Pinned upstream engine source (build-time only)
 ```
 
-The Android modules may depend on public upstream crates and documented extension
-points. Upstream engine code must not depend on Android modules.
-
-## Module ownership
-
-- `android/app`: Gradle project, manifest, Activity and minimal Java/Kotlin bridges.
-- `android/native`: Android `cdylib`, JNI boundary and startup/shutdown.
-- `android/modules/input`: touch, virtual controls, keyboard, mouse and gamepad mapping.
-- `android/modules/lifecycle`: surface creation/destruction, pause/resume and recovery.
-- `android/modules/storage`: SAF/document-provider access and game data paths.
-- `android/modules/graphics`: Android surface and renderer selection policy.
-- `android/modules/mods`: discovery and compatibility checks; no unsupported mod format is
-  claimed to work until tested against the pinned engine/API.
-
-Modules are added only when they own real code. Avoid placeholder crates and
-unnecessary abstraction layers.
-
-## Upstream pin
-
-`UPSTREAM.lock` is the human-readable source of truth. The Git submodule gitlink
-must point to the same commit. Updating Horizon means changing both deliberately,
-reviewing upstream API changes, and rerunning the architecture and Android tests.
+The Android frontend may depend on upstream public crates and documented
+extension points. The upstream engine must not depend on Android modules.
 
 ## Minimal-change policy
 
-1. Reproduce a bug with a focused test before changing code.
-2. Change only the responsible Android module.
-3. Never edit files in `upstream/horizon` as part of normal Android development.
-4. If a missing extension point requires upstream work, first document the exact
-   API gap and a minimal upstream proposal.
-5. Do not report an APK or device test as successful unless it was actually built
-   and exercised.
+1. Preserve the original launcher renderer, pages, touch UI and file manager.
+2. Reproduce a compatibility gap before changing code.
+3. Implement it in the Android adapter unless that is genuinely impossible.
+4. If upstream needs an extension point, add the smallest Android-neutral API
+   seam and record it as a patch in `patches/`.
+5. Never replace upstream source with the Android fork's general engine.
+6. Never use `include!` to inject Android code into `game.rs`.
+7. Keep the original single Winit event loop; the launcher hosts the game's
+   `ApplicationHandler`.
+8. Do not report an APK or device test as successful unless it was built and
+   exercised on the target.

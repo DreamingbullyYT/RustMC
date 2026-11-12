@@ -1,60 +1,48 @@
-# rustMC — Android integration for Horizon
+# rustMC — Horizon Android integration
 
-This repository contains Android-specific integration code. Horizon remains an
-upstream Git submodule at `upstream/horizon`; we do not vendor or permanently
-fork its source tree.
+This repository contains the **original Horizon Android application source**
+and the Android-specific integration needed to run it on the upstream PC
+engine.
 
-- Upstream: https://github.com/horizon-rust/horizon
-- Tracked upstream branch: `main`
-- Exact checked-out upstream revision: [`UPSTREAM.lock`](UPSTREAM.lock)
+- Original Android project: imported from [GoyDevv/Horizon-Android](https://github.com/GoyDevv/Horizon-Android), branch `android`.
+- Exact upstream engine revision: `UPSTREAM.lock`.
+- Android application sources: `packaging/android/`, `crates/horizon-android/`,
+  `crates/horizon-client/src/android*/`, and the Android-specific support files.
+- Engine policy: do not copy or track the fork's general engine workspace here.
 
-## Checkout
+## Engine checkout at build time
+
+Horizon is **not a Git submodule** and its source is not committed into this
+repository. GitHub Actions (and local developers) fetch the exact commit in
+`UPSTREAM.lock` into a temporary build directory:
 
 ```sh
-git clone https://github.com/DreamingbullyYT/rustMC.git
-cd rustMC
-git submodule update --init --recursive
+./scripts/checkout-upstream.sh
 ./scripts/verify-upstream.sh
 ```
 
-## Upstream synchronization
+The checkout verifies both the commit SHA and tree SHA, then applies only the
+reviewed patches in `patches/*.patch`. The upstream pin is not advanced by a
+scheduled sync job; changing it requires an explicit, reviewed update.
 
-GitHub Actions checks upstream every 6 hours (and can also be run manually).
-When upstream `main` advances, the job updates the submodule gitlink and
-`UPSTREAM.lock` to the exact new commit, applies the Android patch series from
-`patches/*.patch`, and runs the repository checks.
+## Architecture rules
 
-No commit is created when upstream has not changed. If a patch no longer applies,
-the job fails instead of silently dropping or rewriting the patch. The upstream
-submodule itself is never pushed to or modified on the upstream server.
-
-To update locally:
-
-```sh
-./scripts/update-upstream.sh
-python3 -m unittest discover -s tests -v
-./scripts/verify-upstream.sh
-```
-
-## Android patch policy
-
-- Android integration belongs in separate modules under `android/`.
-- Keep upstream source changes as small, reviewable patch files in `patches/`.
-- Never edit files under `upstream/horizon` manually and commit them as if they
-  were upstream changes.
-- Every patch must apply cleanly to the tracked upstream revision.
-- If upstream changes break a patch, stop synchronization and fix the patch
-  deliberately; do not skip it automatically.
+1. Preserve the imported Android launcher, renderer, touch UI and file manager.
+2. Put Android platform services and compatibility code in separate Android
+   modules wherever possible.
+3. Keep the upstream engine identical to the pinned PC revision by default.
+4. Patch upstream only when a required integration point cannot be implemented
+   outside it. Each patch must be small, justified and tested.
+5. Do not inject Android code into `game.rs` with `include!`; this breaks the
+   Horizon mixin tooling.
+6. Keep the original single-Winit-event-loop lifecycle: the launcher hosts the
+   game's `ApplicationHandler`; never start a nested event loop.
+7. Keep APKs, game resources, signing keys and generated build files out of Git.
 
 ## Current status
 
-This is still the repository/bootstrap stage, not a working Android build.
-The six-hour upstream tracking and patch-application pipeline is being established;
-the Android adapter, lifecycle integration, packaging, and APK pipeline remain
-to be implemented and tested.
-
-## Direct repository edit test
-
-GitHub write access was verified by updating this README directly through the
-repository connection on 2026-11-11. This section can be removed once the
-connection test is no longer needed.
+The original Android-specific source set has been imported. The compatibility
+port to the pinned upstream engine is in progress. **No upstream-compatible APK
+is claimed to build or run yet.** GitHub Actions currently verifies the pinned
+upstream checkout and source baseline; the APK job will be enabled after the
+Android adapter and build overlay are complete.

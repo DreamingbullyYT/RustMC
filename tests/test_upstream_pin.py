@@ -1,43 +1,41 @@
 import json
 import pathlib
-import re
-import subprocess
 import unittest
-
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class UpstreamPinTests(unittest.TestCase):
-    def test_lock_contains_a_valid_exact_revision(self):
+    def test_lock_contains_exact_upstream_revision(self):
         lock = json.loads((ROOT / "UPSTREAM.lock").read_text(encoding="utf-8"))
+        self.assertEqual(lock["repository"], "https://github.com/horizon-rust/horizon.git")
         self.assertRegex(lock["commit"], r"^[0-9a-f]{40}$")
         self.assertRegex(lock["tree"], r"^[0-9a-f]{40}$")
-        self.assertEqual(lock["submodule_path"], "upstream/horizon")
-        self.assertEqual(
-            lock["repository"], "https://github.com/horizon-rust/horizon.git"
-        )
+        self.assertEqual(lock["checkout_path"], ".local/upstream/horizon")
+        self.assertNotIn("submodule_path", lock)
+        self.assertEqual(lock["commit"], "69ba5a7b63642555fdd3461defcb53c265967d59")
 
-    def test_gitlink_points_to_locked_commit(self):
-        lock = json.loads((ROOT / "UPSTREAM.lock").read_text(encoding="utf-8"))
-        entry = subprocess.check_output(
-            ["git", "ls-tree", "HEAD", "upstream/horizon"],
-            cwd=ROOT,
-            text=True,
-        ).strip()
-        self.assertIn(
-            f"160000 commit {lock['commit']}\tupstream/horizon", entry
-        )
+    def test_engine_is_not_a_submodule_or_committed_checkout(self):
+        self.assertFalse((ROOT / ".gitmodules").exists())
+        self.assertFalse((ROOT / "upstream" / "horizon").exists())
 
-    def test_submodule_tracks_official_main_branch(self):
-        config = (ROOT / ".gitmodules").read_text(encoding="utf-8")
-        self.assertIn("path = upstream/horizon", config)
-        self.assertIn("url = https://github.com/horizon-rust/horizon.git", config)
-        self.assertIn("branch = main", config)
+    def test_build_time_checkout_verifies_both_hashes_and_applies_patches(self):
+        script = (ROOT / "scripts/checkout-upstream.sh").read_text(encoding="utf-8")
+        self.assertIn('git -C "$DEST" fetch --quiet --depth 1 origin "$COMMIT"', script)
+        self.assertIn("HEAD^{tree}", script)
+        self.assertIn("git apply --check", script)
+        self.assertIn("UPSTREAM.lock", script)
 
-    def test_engine_is_not_vendored_at_repository_root(self):
-        self.assertFalse((ROOT / "crates").exists())
-        self.assertFalse((ROOT / "Cargo.toml").exists())
+    def test_original_android_source_is_present(self):
+        for path in (
+            "packaging/android/AndroidManifest.xml",
+            "packaging/android/build.gradle",
+            "crates/horizon-android/Cargo.toml",
+            "crates/horizon-client/src/android_main.rs",
+            "crates/horizon-client/src/android/launcher.rs",
+            "crates/horizon-client/src/android/game_launch.rs",
+        ):
+            self.assertTrue((ROOT / path).is_file(), path)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,0 @@
-[submodule "upstream/horizon"]
-	path = upstream/horizon
-	url = https://github.com/horizon-rust/horizon.git
-	branch = main

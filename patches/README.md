@@ -1,11 +1,10 @@
-# Android patch series
+# Minimal upstream patch series
 
-Place reviewed, ordered Git-compatible patch files here using the `.patch`
-extension. They are applied to the checked-out Horizon submodule after every
-upstream synchronization and before Android builds/tests.
+The upstream engine is fetched at build time from the exact revision in
+`UPSTREAM.lock`. Ordered `.patch` files in this directory are applied to the
+temporary checkout by `scripts/checkout-upstream.sh`.
 
-Keep Android application code in `android/` whenever possible. Use patches only
-when an Android integration point cannot be implemented outside upstream.
-
-A patch that stops applying must fail the synchronization job. Do not add
-`--reject`, ignore errors, or automatically discard a patch.
+Keep Android application code in separate modules. A patch is allowed only
+when the required extension point cannot be implemented outside upstream.
+Every patch must apply cleanly to the pinned commit and must be tested against
+the desktop path and Android target. Do not silently skip failed patches.
