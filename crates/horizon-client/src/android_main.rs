@@ -289,6 +289,7 @@ fn android_main(app: AndroidApp) {
         std::process::exit(0);
     }
     horizon_client::crash::install(home.clone(), "client");
+    horizon_client::entry::initialize_hosted_runtime();
     exit_reports::install(&home);
     let _ = std::fs::remove_file(home.join("android-error.txt"));
     if let Some(mut data) = engine_data {

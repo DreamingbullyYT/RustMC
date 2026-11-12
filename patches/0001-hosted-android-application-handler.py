@@ -15,26 +15,36 @@ def replace_once(path: str, old: str, new: str) -> None:
     file.write_text(source.replace(old, new, 1), encoding="utf-8")
 
 
-# 1. Extract ALL one-time engine/mod hook registration from the executable entry.
-# Android supplies its own logger and lifecycle, but it must not skip upstream
-# renderer, data-load, worldgen, client, sound, allocator, or mod registrations.
+# 1. Split upstream executable setup into two ordered phases. Android supplies its
+# own logger/crash directory, but still executes every upstream engine registration.
 entry_path = "crates/horizon-client/src/entry.rs"
 entry = ROOT / entry_path
 source = entry.read_text(encoding="utf-8")
 main_marker = "pub fn main_with(mods: crate::mod_api::Mods) {"
-main_start = source.index(main_marker) + len(main_marker)
 args_marker = "    let args: Vec<String> = std::env::args().skip(1).collect();"
+run_marker = "    if let Err(error) = game::run_with() {"
+renderers_marker = "    let renderers = crate::mod_api::mods()"
+anchor = "/// Start the game with trait mods in dispatch order.\npub fn main_with(mods: crate::mod_api::Mods) {"
+
+main_start = source.index(main_marker) + len(main_marker)
 args_start = source.index(args_marker, main_start)
-initialization = source[main_start:args_start]
-if "crate::mod_api::MODS.set(mods)" not in initialization:
-    raise SystemExit("entry.rs: initialization block no longer contains MODS registration")
-if "native_client_hooks::install" not in initialization:
-    raise SystemExit("entry.rs: initialization block changed; native client hooks were not found")
-if "sound_engine::install_playback_hook" not in initialization:
-    raise SystemExit("entry.rs: initialization block changed; sound hook was not found")
-helper = """
-// Shared one-time setup for the executable and native frontends which host
-// the game's ApplicationHandler on an event loop they already own.
+first_phase = source[main_start:args_start]
+if "crate::mod_api::MODS.set(mods)" not in first_phase:
+    raise SystemExit("entry.rs: initial MODS registration anchor changed")
+if "horizon_hooks::engine::seal()" not in first_phase:
+    raise SystemExit("entry.rs: engine hook sealing anchor changed")
+
+runtime_start = source.index(renderers_marker, args_start)
+runtime_end = source.index(run_marker, runtime_start)
+runtime_phase = source[runtime_start:runtime_end]
+for required in ("native_render::install", "native_load_hooks::install",
+                 "worldgen::native_generate::install", "native_client_hooks::install",
+                 "sound_engine::install_playback_hook", "raise_open_file_limit();"):
+    if required not in runtime_phase:
+        raise SystemExit(f"entry.rs: runtime registration anchor missing: {required}")
+
+helpers = """
+// Shared engine/mod initialization for the executable and native frontends.
 static HOSTED_INITIALIZED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 
 pub fn initialize_for_hosted_application(mods: crate::mod_api::Mods) {
@@ -42,29 +52,40 @@ pub fn initialize_for_hosted_application(mods: crate::mod_api::Mods) {
         log::warn!("Horizon engine initialization already ran; ignoring the second call");
         return;
     }
-""" + initialization + """    logging::set_line_hook(crate::native_client_hooks::native_log_line);
-    raise_open_file_limit();
+""" + first_phase + """    logging::set_line_hook(crate::native_client_hooks::native_log_line);
 }
 
+// Register runtime hooks after the host has installed logging and its crash directory.
+static HOSTED_RUNTIME_INITIALIZED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
+pub fn initialize_hosted_runtime() {
+    if HOSTED_RUNTIME_INITIALIZED.set(()).is_err() {
+        log::warn!("Horizon runtime hooks already installed; ignoring the second call");
+        return;
+    }
+""" + runtime_phase + """}
+
 """
-anchor = "/// Start the game with trait mods in dispatch order.\npub fn main_with(mods: crate::mod_api::Mods) {"
 if source.count(anchor) != 1:
     raise SystemExit("entry.rs: main_with insertion anchor changed")
-source = source.replace(anchor, helper + anchor, 1)
-# Recompute offsets after inserting the helper: the source grew before main_with.
+source = source.replace(anchor, helpers + anchor, 1)
+
+# Recompute offsets after inserting helpers; do not use stale source indices.
 main_start = source.index(main_marker) + len(main_marker)
 args_start = source.index(args_marker, main_start)
 source = source[:main_start] + "\n    initialize_for_hosted_application(mods);\n" + source[args_start:]
-# Remove the old copies from main_with, keeping the new helper copies intact.
+main_body_start = source.index(main_marker)
+runtime_start = source.index(renderers_marker, main_body_start)
+runtime_end = source.index(run_marker, runtime_start)
+source = source[:runtime_start] + "    initialize_hosted_runtime();\n" + source[runtime_end:]
+
+# The first phase now owns the original line-hook registration.
 main_body_start = source.index(main_marker)
 tail = source[main_body_start:]
-for line in (
-    "    logging::set_line_hook(crate::native_client_hooks::native_log_line);\n",
-    "    raise_open_file_limit();\n",
-):
-    if tail.count(line) != 1:
-        raise SystemExit(f"entry.rs: expected one remaining moved call: {line.strip()}")
-    tail = tail.replace(line, "", 1)
+line_hook = "    logging::set_line_hook(crate::native_client_hooks::native_log_line);\n"
+if tail.count(line_hook) != 1:
+    raise SystemExit("entry.rs: expected one original line-hook call in main_with")
+tail = tail.replace(line_hook, "", 1)
 source = source[:main_body_start] + tail
 entry.write_text(source, encoding="utf-8")
 
