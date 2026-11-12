@@ -11,10 +11,7 @@ use crate::{
         preview,
     },
 };
-use horizon_client::{
-    hud::rgba,
-
-};
+use horizon_client::hud::rgba;
 use crate::{android_skin_head as skin_head, android_ui_theme::{Face, Ui}};
 use std::{
     path::{Path, PathBuf},
