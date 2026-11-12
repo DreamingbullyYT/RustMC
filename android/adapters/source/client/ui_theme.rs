@@ -1177,7 +1177,7 @@ impl<'a> Ui<'a> {
             if total <= max_px {
                 return text.to_owned();
             }
-            crate::ui_text::fit(text, max_px, |previous, ch| {
+            crate::android_ui_text::fit(text, max_px, |previous, ch| {
                 let id = font.glyph_id(ch);
                 previous.map_or(0.0, |p| scaled.kern(font.glyph_id(p), id)) + scaled.h_advance(id)
             })
@@ -1456,7 +1456,7 @@ impl<'a> Ui<'a> {
         let inset = (size * 0.07).max(1.0);
         let face = (size - inset * 2.0).max(8.0);
         let pw = face / 8.0;
-        if let Some(skin) = crate::skin_head::head(player_name) {
+        if let Some(skin) = crate::android_skin_head::head(player_name) {
             for row in 0..8 {
                 for col in 0..8 {
                     let px = x + inset + col as f32 * pw;
