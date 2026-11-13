@@ -31,6 +31,7 @@ replace_once(game, "mod window_handler;\n",
 replace_once(game, "use event_loop::EventLoopCtl;\n",
 """pub use android::{
     android_cursor_grabbing, android_game_fps, android_hotbar_rect, android_ime_allowed,
+    start_android_diagnostics, stop_android_diagnostics,
     send_android_control_event, send_android_look, send_android_menu_touch,
     set_android_app, set_android_haptic_callback, set_android_ime_allowed, set_android_look_active,
 };
@@ -117,6 +118,8 @@ replace_once(window,
 """    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         #[cfg(target_os = "android")]
         self.android_poll_input(event_loop);
+        #[cfg(target_os = "android")]
+        android::android_diag_event_loop();
         self.idle(event_loop);
     }
 """)
