@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::{BTreeMap, BTreeSet}, io::{Read, Seek}};
 
 pub mod dependencies;
+pub mod hmod;
 pub mod pc_api;
 
 pub const MANIFEST_FILE: &str = "horizon-native.json";
@@ -92,8 +93,8 @@ fn allowed_payload(name: &str, id: &str) -> bool {
     name.starts_with(&format!("mixins/{id}/")) && name.len() > format!("mixins/{id}/").len()
 }
 
-/// Validates an HNMod ZIP without extracting files or executing native code.
-pub fn read_bundle<R: Read + Seek>(reader: R) -> Result<Bundle, Error> {
+/// Reads every regular file of a ZIP with the path, count and size limits. Nothing is extracted or run.
+pub(crate) fn read_files<R: Read + Seek>(reader: R, allow_wasm: bool) -> Result<BTreeMap<String, Vec<u8>>, Error> {
     let mut zip = zip::ZipArchive::new(reader).map_err(|e| Error::Archive(e.to_string()))?;
     let mut files = BTreeMap::new();
     let mut total = 0u64;
@@ -110,7 +111,7 @@ pub fn read_bundle<R: Read + Seek>(reader: R) -> Result<Bundle, Error> {
             return Err(Error::Limit("too many archive files".into()));
         }
         safe_path(&name)?;
-        if name == "mod.wasm" {
+        if name == "mod.wasm" && !allow_wasm {
             return Err(Error::Manifest("legacy WebAssembly payloads are unsupported".into()));
         }
         let mut bytes = Vec::new();
@@ -125,6 +126,21 @@ pub fn read_bundle<R: Read + Seek>(reader: R) -> Result<Bundle, Error> {
             return Err(Error::UnsafePath(format!("duplicate archive entry: {name}")));
         }
     }
+    Ok(files)
+}
+
+pub(crate) fn digest(files: &BTreeMap<String, Vec<u8>>) -> String {
+    let mut h = Sha256::new();
+    for (name, bytes) in files {
+        h.update((name.len() as u64).to_le_bytes()); h.update(name.as_bytes());
+        h.update((bytes.len() as u64).to_le_bytes()); h.update(bytes);
+    }
+    format!("{:x}", h.finalize())
+}
+
+/// Validates an HNMod ZIP without extracting files or executing native code.
+pub fn read_bundle<R: Read + Seek>(reader: R) -> Result<Bundle, Error> {
+    let files = read_files(reader, false)?;
     let raw = files.get(MANIFEST_FILE).ok_or_else(|| Error::Manifest("missing horizon-native.json".into()))?;
     let mut manifest: Manifest = serde_json::from_slice(raw).map_err(|e| Error::Manifest(e.to_string()))?;
     if !valid_id(&manifest.id) { return Err(Error::Manifest("invalid mod id".into())); }
@@ -150,12 +166,8 @@ pub fn read_bundle<R: Read + Seek>(reader: R) -> Result<Bundle, Error> {
     if manifest.horizon.is_empty() { manifest.horizon = mixin_horizon.to_owned(); }
     manifest.version = mixin_version.to_owned();
     manifest.validate()?;
-    let mut h = Sha256::new();
-    for (name, bytes) in &files {
-        h.update((name.len() as u64).to_le_bytes()); h.update(name.as_bytes());
-        h.update((bytes.len() as u64).to_le_bytes()); h.update(bytes);
-    }
-    Ok(Bundle { manifest, files, sha256: format!("{:x}", h.finalize()) })
+    let sha256 = digest(&files);
+    Ok(Bundle { manifest, files, sha256 })
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
