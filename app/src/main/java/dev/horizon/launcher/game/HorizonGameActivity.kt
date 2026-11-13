@@ -104,7 +104,7 @@ class HorizonGameActivity : NativeActivity(), LifecycleOwner, SavedStateRegistry
         // The engine runs on the `android_main` thread, which Rust spawns with a 2 MiB stack by default.
         // Horizon's desktop main thread has 8 MiB and deep world/render frames overflow 2 MiB (SIGSEGV
         // SEGV_ACCERR with sp outside any mapping). Rust reads this once, before it spawns that thread.
-        runCatching { android.system.Os.setenv("RUST_MIN_STACK", (16 * 1024 * 1024).toString(), true) }
+        runCatching { android.system.Os.setenv("RUST_MIN_STACK", (8 * 1024 * 1024).toString(), true) }
         dev.horizon.launcher.data.Updater.armGuard(filesDir, "game")
         super.onCreate(savedInstanceState)
         runCatching {
