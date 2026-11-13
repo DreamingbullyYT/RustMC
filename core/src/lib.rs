@@ -8,7 +8,7 @@ use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
-use horizon_launcher::account::{self, Accounts, Player};
+use horizon_launcher::account::{self, Accounts};
 use horizon_launcher::backend::{self, Settings};
 use horizon_launcher::{instances, server_list, worlds};
 use jni::JNIEnv;
@@ -295,18 +295,10 @@ fn touch_controls_save(settings: &AndroidTouchControls) -> Result<(), String> {
 fn accounts_json() -> Result<String, String> {
     let accounts = Accounts::load();
     let selected = accounts.selected().map(|a| a.uuid.clone());
-    let player = accounts.player();
-    let (kind, name) = match &player {
-        Player::Microsoft(uuid) => (
-            "microsoft",
-            accounts
-                .accounts
-                .iter()
-                .find(|a| &a.uuid == uuid)
-                .map(|a| a.name.clone()),
-        ),
-        Player::Offline(name) => ("offline", Some(name.clone())),
-        Player::GameName => ("game", None),
+    // Upstream removed offline names (Nov 9): the game plays only as a signed-in account that owns it.
+    let (kind, name) = match accounts.selected() {
+        Some(account) => ("microsoft", Some(account.name.clone())),
+        None => ("none", None),
     };
     let dto = json!({
         "accounts": accounts
@@ -315,8 +307,8 @@ fn accounts_json() -> Result<String, String> {
             .map(|a| json!({"uuid": a.uuid, "name": a.name}))
             .collect::<Vec<_>>(),
         "selected": selected,
-        "offline": accounts.offline,
-        "offlineSelected": accounts.offline_selected,
+        "offline": Vec::<String>::new(),
+        "offlineSelected": Value::Null,
         "player": {"kind": kind, "name": name},
         "hasOwner": accounts.has_owner(account::store()),
         "keychain": account::store().persistent(),
@@ -325,25 +317,11 @@ fn accounts_json() -> Result<String, String> {
     serde_json::to_string(&dto).map_err(|e| e.to_string())
 }
 
-/// Adds an offline name and makes it the one that plays. On Android there is no keychain and no
-/// Microsoft sign-in configured, so the owner gate is opened for offline play (the desktop
-/// launcher's hidden `dev_offline` developer option).
-fn keep_offline(name: &str) -> Result<String, String> {
-    let name = name.trim().to_string();
-    if !account::valid_offline_name(&name) {
-        return Err(format!(
-            "{name}: an offline name is 3 to 16 letters, digits or _"
-        ));
-    }
-    let mut settings = Settings::load();
-    if !settings.dev_offline {
-        settings.dev_offline = true;
-        settings.save();
-    }
-    let mut accounts = Accounts::load();
-    accounts.play_as_with(account::store(), Player::Offline(name), true)?;
-    accounts.save()?;
-    accounts_json()
+const NO_OFFLINE: &str =
+    "Offline names were removed from Horizon: sign in with a Microsoft account that owns Minecraft: Java Edition.";
+
+fn keep_offline(_name: &str) -> Result<String, String> {
+    Err(NO_OFFLINE.to_string())
 }
 
 fn merge(base: &mut Value, patch: Value) {
@@ -381,14 +359,6 @@ pub extern "system" fn Java_dev_horizon_launcher_core_Native_nativeInit(
     let _ = std::fs::create_dir_all(&game);
     std::env::set_var("HORIZON_LAUNCHER_HOME", &root);
     std::env::set_var("HORIZON_HOME", &game);
-    // First run on Android: offline play is the default, since the build has no Microsoft
-    // sign-in and no keychain. A settings file that already exists is left alone.
-    let settings_path = root.join("settings.json");
-    if !settings_path.exists() {
-        let mut settings = Settings::load();
-        settings.dev_offline = true;
-        settings.save();
-    }
     log::info!("core home: {}", root.display());
     reply(&mut env, Ok(root.to_string_lossy().into_owned()))
 }
@@ -689,10 +659,8 @@ pub extern "system" fn Java_dev_horizon_launcher_core_Native_nativeRemoveOffline
         Err(e) => return reply(&mut env, Err(e)),
     };
     guarded(&mut env, || {
-        let mut accounts = Accounts::load();
-        accounts.remove_offline(&name, &horizon_launcher::skins::dir())?;
-        accounts.save()?;
-        accounts_json()
+        let _ = &name;
+        Err(NO_OFFLINE.to_string())
     })
 }
 
@@ -702,10 +670,7 @@ pub extern "system" fn Java_dev_horizon_launcher_core_Native_nativePlayAsGameNam
     _this: JObject,
 ) -> jstring {
     guarded(&mut env, || {
-        let mut accounts = Accounts::load();
-        accounts.play_as_with(account::store(), Player::GameName, true)?;
-        accounts.save()?;
-        accounts_json()
+        Err(NO_OFFLINE.to_string())
     })
 }
 
@@ -721,7 +686,7 @@ pub extern "system" fn Java_dev_horizon_launcher_core_Native_nativeSelectAccount
     };
     guarded(&mut env, || {
         let mut accounts = Accounts::load();
-        accounts.play_as_with(account::store(), Player::Microsoft(uuid), false)?;
+        accounts.play_as(&uuid)?;
         accounts.save()?;
         accounts_json()
     })
@@ -1187,23 +1152,19 @@ pub extern "system" fn Java_dev_horizon_launcher_core_Native_nativeLaunch(
         Err(e) => return reply(&mut env, Err(e)),
     };
     guarded(&mut env, || {
-        let settings = Settings::load();
         let tag = backend::resolve_version(None)?;
         backend::need_prepared(&tag)?;
-        let game_session = account::session_for_game(&backend::game_home(), settings.dev_offline)
-            .map_err(|e| e.to_string())?;
-        let (session, offline) = (game_session.file, game_session.offline);
-        let accounts = Accounts::load();
+        let game_session = account::session_for_game(&backend::game_home())
+            .map_err(|refused| match refused.keyring.clone() {
+                Some(why) => why,
+                None => refused.to_string(),
+            })?;
+        let offline = game_session.offline.clone();
         let mut cmd = backend::client_command(&tag);
-        if let Some(file) = session {
+        if let Some(file) = game_session.file {
             cmd.arg("--session-file").arg(file);
         }
-        if let Some(name) = accounts.name_arg() {
-            cmd.arg("--name").arg(name);
-        }
-        for (key, value) in accounts.look_env() {
-            cmd.env(key, value);
-        }
+        cmd.envs(game_session.env);
         // Keep the Android controls editor connected to the game launch contract. The
         // Android game target can read this profile before creating its input layer.
         let touch_controls = touch_controls_load()?;
