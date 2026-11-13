@@ -8,6 +8,7 @@ use std::{collections::{BTreeMap, BTreeSet}, io::{Read, Seek}};
 
 pub mod dependencies;
 pub mod hmod;
+pub mod hpack;
 pub mod modpack;
 pub mod pc_api;
 
