@@ -71,7 +71,7 @@ private fun psButtonColors() = ButtonDefaults.buttonColors(containerColor = PsBl
 private enum class HomeTab(val label: String, val icon: ImageVector) {
     PLAY("Play", Icons.Default.PlayArrow),
     MODS("Mods", Icons.Default.Extension),
-    CONTROLS("Controls", Icons.Default.SportsEsports),
+    COMPILE("Compile", Icons.Default.Build),
     SETTINGS("Settings", Icons.Default.Settings)
 }
 
@@ -158,17 +158,23 @@ fun HorizonLauncherUi(
                                 HomeTab.PLAY -> PlayPage(
                                     ready = minecraftReady, version = selectedInstance?.version, playerName = playerName,
                                     onPlay = onPlay, onInstall = onInstall, onImportFolder = onImportFolder,
-                                    onRefresh = onRefresh, onOpenAccounts = { accountsOpen = true }
+                                    onRefresh = onRefresh, onOpenAccounts = { accountsOpen = true },
+                                    onOpenControlsEditor = onOpenControlsEditor
                                 )
                                 HomeTab.MODS -> ModsPage(
                                     browseCatalog, browseItems, browseProgress, mods, browseInstalled,
                                     onSearchBrowse, onInstallBrowse, onImportMod, onImportShader,
                                     onRemoveMod, onRemoveShader, onRemoveBrowse
                                 )
-                                HomeTab.CONTROLS -> ControlsPage(touchControls, onSaveTouchControls, onOpenControlsEditor)
+                                HomeTab.COMPILE -> BuildPage(
+                                    toolchainReady = toolchainReady,
+                                    onCompile = onCompileHnmod,
+                                    onImportBuild = onImportBuild,
+                                    onShowBuildLog = onShowBuildLog
+                                )
                                 HomeTab.SETTINGS -> SettingsPage(
                                     playerName, accounts, renderApi, onSetRenderApi, telemetry, onSetTelemetry,
-                                    platform, onExportBackup, onRestoreBackup, onShowGameLog, onShowBuildLog
+                                    platform, onExportBackup, onRestoreBackup, onShowGameLog
                                 ) { accountsOpen = true }
                             }
                         }
@@ -227,7 +233,8 @@ private fun PsNavBar(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
 @Composable
 private fun PlayPage(
     ready: Boolean, version: String?, playerName: String, onPlay: () -> Unit, onInstall: () -> Unit,
-    onImportFolder: () -> Unit, onRefresh: () -> Unit, onOpenAccounts: () -> Unit
+    onImportFolder: () -> Unit, onRefresh: () -> Unit, onOpenAccounts: () -> Unit,
+    onOpenControlsEditor: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -276,13 +283,26 @@ private fun PlayPage(
             }
         }
         Spacer(Modifier.height(16.dp))
-        Button(
-            onClick = if (ready) onPlay else onInstall,
-            modifier = Modifier.fillMaxWidth().height(58.dp), shape = CircleShape, colors = psButtonColors()
-        ) {
-            Icon(if (ready) Icons.Default.PlayArrow else Icons.Default.Download, null, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(if (ready) "Play" else "Install game", fontWeight = FontWeight.Black, fontSize = 17.sp)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = if (ready) onPlay else onInstall,
+                modifier = Modifier.weight(1.35f).height(58.dp), shape = CircleShape, colors = psButtonColors()
+            ) {
+                Icon(if (ready) Icons.Default.PlayArrow else Icons.Default.Download, null, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(if (ready) "Play" else "Install", fontWeight = FontWeight.Black, fontSize = 16.sp)
+            }
+            OutlinedButton(
+                onClick = onOpenControlsEditor,
+                modifier = Modifier.weight(1f).height(58.dp),
+                shape = CircleShape,
+                border = BorderStroke(1.dp, Hairline),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink)
+            ) {
+                Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Controls", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
+            }
         }
         if (!ready) {
             TextButton(onClick = onImportFolder, modifier = Modifier.align(Alignment.CenterHorizontally)) {
@@ -402,60 +422,98 @@ private fun ModsPage(
     }
 }
 
-// ---------------------------------------------------------------- Controls
+// ---------------------------------------------------------------- Compile
 
 @Composable
-private fun ControlsPage(controls: TouchControlsInfo?, onSave: (JSONObject) -> Unit, onOpenEditor: () -> Unit) {
-    var enabled by remember(controls) { mutableStateOf(controls?.enabled ?: true) }
-    var leftHanded by remember(controls) { mutableStateOf(controls?.leftHanded ?: false) }
-    var autoJump by remember(controls) { mutableStateOf(controls?.autoJump ?: false) }
-    var holdSprint by remember(controls) { mutableStateOf(controls?.holdToSprint ?: false) }
-    var haptics by remember(controls) { mutableStateOf(controls?.haptics ?: true) }
-    var opacity by remember(controls) { mutableFloatStateOf(controls?.opacity ?: .72f) }
-    var size by remember(controls) { mutableFloatStateOf(controls?.buttonSize ?: 1f) }
-    var sensitivity by remember(controls) { mutableFloatStateOf(controls?.lookSensitivity ?: 1f) }
+private fun BuildPage(
+    toolchainReady: Boolean,
+    onCompile: () -> Unit,
+    onImportBuild: () -> Unit,
+    onShowBuildLog: () -> Unit
+) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-        PageTitle("Controls", "Touch controls for the game.")
+        PageTitle("Compile", "Build a native Android game version from HNMod source.")
         GlassCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Gamepad, null, tint = Blue, modifier = Modifier.size(32.dp))
+                Box(
+                    Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(CardTint),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Terminal, null, tint = Blue, modifier = Modifier.size(24.dp))
+                }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Control layout", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Text("Move, resize and restyle every button", color = MutedInk, fontSize = 11.sp)
+                    Text("Embedded HNMod compiler", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (toolchainReady) "Private compiler runtime ready"
+                        else "Installed automatically when you compile for the first time",
+                        color = MutedInk, fontSize = 11.sp
+                    )
+                }
+                Box(
+                    Modifier.clip(CircleShape).background(if (toolchainReady) Color(0x223DDB9A) else CardTint)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        if (toolchainReady) "READY" else "ON DEMAND",
+                        color = if (toolchainReady) Positive else Sky,
+                        fontSize = 10.sp, fontWeight = FontWeight.Bold
+                    )
                 }
             }
+        }
+        Spacer(Modifier.height(12.dp))
+        GlassCard {
+            Text("Compile native mods", color = Ink, fontSize = 17.sp, fontWeight = FontWeight.Black)
+            Text(
+                "Choose one or more .hnmod files. Horizon checks their engine and mixins compatibility, " +
+                    "applies the mods, compiles the Android game library and activates the result as a separate build.",
+                color = MutedInk, fontSize = 12.sp, modifier = Modifier.padding(top = 7.dp)
+            )
             Button(
-                onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().padding(top = 14.dp).height(50.dp),
+                onClick = onCompile,
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp).height(52.dp),
                 shape = CircleShape, colors = psButtonColors()
             ) {
-                Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Build, null, modifier = Modifier.size(19.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Edit layout", fontWeight = FontWeight.Bold)
+                Text("Select HNMods and compile", fontWeight = FontWeight.Bold)
             }
         }
-        Spacer(Modifier.height(8.dp))
-        SectionLabel("Behavior")
-        ToggleRow("Touch controls", enabled) { enabled = it }
-        ToggleRow("Left-handed mode", leftHanded) { leftHanded = it }
-        ToggleRow("Auto jump", autoJump) { autoJump = it }
-        ToggleRow("Hold to sprint", holdSprint) { holdSprint = it }
-        ToggleRow("Haptic feedback", haptics) { haptics = it }
-        SectionLabel("Feel")
-        SliderRow("Opacity", opacity, .3f..1f, { opacity = it }, "${(opacity * 100).toInt()}%")
-        SliderRow("Button size", size, .7f..1.5f, { size = it }, String.format(Locale.US, "%.2fx", size))
-        SliderRow("Look sensitivity", sensitivity, .25f..2f, { sensitivity = it }, String.format(Locale.US, "%.2fx", sensitivity))
-        Button(
-            onClick = {
-                onSave(
-                    JSONObject().put("enabled", enabled).put("left_handed", leftHanded)
-                        .put("auto_jump", autoJump).put("hold_to_sprint", holdSprint).put("haptics", haptics)
-                        .put("opacity", opacity.toDouble()).put("button_size", size.toDouble())
-                        .put("look_sensitivity", sensitivity.toDouble())
-                )
-            },
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(50.dp), shape = CircleShape, colors = psButtonColors()
-        ) { Text("Save", fontWeight = FontWeight.Bold) }
+        Spacer(Modifier.height(12.dp))
+        GlassCard {
+            Text("Other build actions", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            ActionPill("Import compiled game library", Icons.Default.FileDownload, onImportBuild, Modifier.fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
+            ActionPill("View live build log", Icons.Default.Description, onShowBuildLog, Modifier.fillMaxWidth())
+        }
+        Spacer(Modifier.height(12.dp))
+        GlassCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Storage, null, tint = Sky, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Before the first build", color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(
+                "Requires Android 10+ on an ARM64 device and about 10 GB of free storage. " +
+                    "The first build installs the private compiler and downloads/builds its dependencies; " +
+                    "later builds can reuse the cache and are usually faster.",
+                color = MutedInk, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        GlassCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Security, null, tint = Coral, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Only compile mods you trust", color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(
+                "Native mod build scripts and procedural macros run with Horizon's app permissions. " +
+                    "The compiler is not sandboxed.",
+                color = MutedInk, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)
+            )
+        }
         Spacer(Modifier.height(20.dp))
     }
 }
@@ -466,7 +524,7 @@ private fun ControlsPage(controls: TouchControlsInfo?, onSave: (JSONObject) -> U
 private fun SettingsPage(
     playerName: String, accounts: AccountsInfo?, renderApi: String, onSetRenderApi: (String) -> Unit,
     telemetry: TelemetryInfo?, onSetTelemetry: (Boolean) -> Unit, platform: PlatformInfo?,
-    onExportBackup: () -> Unit, onRestoreBackup: () -> Unit, onShowGameLog: () -> Unit, onBuildLog: () -> Unit, onOpenAccounts: () -> Unit
+    onExportBackup: () -> Unit, onRestoreBackup: () -> Unit, onShowGameLog: () -> Unit, onOpenAccounts: () -> Unit
 ) {
     val apiKeys = listOf("auto", "vulkan", "opengl")
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
@@ -494,8 +552,6 @@ private fun SettingsPage(
         ToggleRow("Share anonymous diagnostics", telemetry?.any ?: false, onSetTelemetry)
         SectionLabel("Help")
         ActionPill("View last game log", Icons.Default.Description, onShowGameLog, Modifier.fillMaxWidth())
-        Spacer(Modifier.height(8.dp))
-        ActionPill("Live build log", Icons.Default.Description, onBuildLog, Modifier.fillMaxWidth())
         if (platform != null) Text("Horizon ${platform.version}", color = MutedInk, fontSize = 11.sp, modifier = Modifier.padding(top = 18.dp, bottom = 20.dp))
     }
 }
