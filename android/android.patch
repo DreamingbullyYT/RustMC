@@ -241,6 +241,7 @@ index dd91773a0..16b8abe82 100644
      fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
 +        #[cfg(target_os = "android")]
 +        self.android_poll_input(event_loop);
++        #[cfg(target_os = "android")]
 +        android::android_diag_event_loop();
          self.idle(event_loop);
      }

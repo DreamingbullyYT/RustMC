@@ -1095,7 +1095,7 @@ pub fn start_android_diagnostics(path: std::path::PathBuf) {
                 let event_age = now.saturating_sub(ANDROID_DIAG_EVENT_MS.load(Ordering::Relaxed));
                 let frame_age = now.saturating_sub(ANDROID_DIAG_FRAME_MS.load(Ordering::Relaxed));
                 let line = format!(
-                    "DIAG t={now}ms event_ticks={events} event_delta={} event_age={event_age}ms frame_ticks={frames} frame_delta={} frame_age={frame_age}ms\\n",
+                    "DIAG t={now}ms event_ticks={events} event_delta={} event_age={event_age}ms frame_ticks={frames} frame_delta={} frame_age={frame_age}ms\n",
                     events.saturating_sub(previous_events),
                     frames.saturating_sub(previous_frames),
                 );
