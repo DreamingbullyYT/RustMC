@@ -146,14 +146,21 @@ pub fn inspect<R: Read + Seek>(reader: R) -> Result<ModpackReport, String> {
             return Err(format!("{} has no integrity hashes", file.path));
         }
         if file.env.client.as_deref() == Some("unsupported") {
+            if file.env.server.as_deref() == Some("required")
+                || file.env.server.as_deref() == Some("optional")
+                || file.env.server.is_none()
+            {
+                server_only_files += 1;
+            }
             continue;
         }
-        if file.env.client.as_deref() == Some("required") || file.env.client.as_deref() == Some("optional") || file.env.client.is_none() {
+        if file.env.client.as_deref() == Some("required")
+            || file.env.client.as_deref() == Some("optional")
+            || file.env.client.is_none()
+        {
             client_files += 1;
             download_bytes = download_bytes.saturating_add(file.file_size);
             if is_java_mod(&file.path) { java_mod_jars.push(file.path.clone()); }
-        } else if file.env.client.as_deref() == Some("unsupported") {
-            server_only_files += 1;
         }
     }
     overrides.sort();
