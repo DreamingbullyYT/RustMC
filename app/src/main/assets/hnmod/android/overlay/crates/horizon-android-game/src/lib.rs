@@ -234,6 +234,7 @@ pub fn android_main(app: winit::platform::android::activity::AndroidApp) {
     };
     let launcher = files.join("launcher");
     install_game_log(&launcher);
+    horizon_client::game::start_android_diagnostics(launcher.join("game-log.txt"));
     // Android's process executable is app_process, not the installed game library.
     // Resolve post-build data beside the active local HNMod build instead.
     unsafe { std::env::remove_var("HORIZON_NATIVE_DATA_ROOT"); }
@@ -322,6 +323,7 @@ pub fn android_main(app: winit::platform::android::activity::AndroidApp) {
     // Upstream's entry installs the mod hooks and renderers, then runs the game; on Android it
     // returns on failure instead of exiting the shared process.
     horizon_client::entry::main_with(Default::default());
+    horizon_client::game::stop_android_diagnostics();
     log::info!("Horizon Android: game loop ended");
     eprintln!("Horizon Android: game loop ended");
 }

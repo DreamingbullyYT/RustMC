@@ -1013,6 +1013,7 @@ impl Game<'_> {
     pub(super) fn android_publish_stats(&self) {
         #[cfg(target_os = "android")]
         {
+            android_diag_frame();
             ANDROID_GAME_FPS.store(self.fps.round().max(0.0) as u32, Ordering::Relaxed);
             if self.frames == 1 || self.frames % 60 == 0 {
                 if let Some(renderer) = &self.renderer {
@@ -1033,4 +1034,85 @@ impl Game<'_> {
             }
         }
     }
+}
+
+
+// Android-only watchdog: a separate thread keeps writing even when the game/event-loop thread
+// stalls. Event-loop and completed-frame heartbeats distinguish a dead loop from a renderer
+// that stopped completing frames.
+#[cfg(target_os = "android")]
+static ANDROID_DIAG_START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+#[cfg(target_os = "android")]
+static ANDROID_DIAG_EVENT_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[cfg(target_os = "android")]
+static ANDROID_DIAG_FRAME_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[cfg(target_os = "android")]
+static ANDROID_DIAG_EVENT_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[cfg(target_os = "android")]
+static ANDROID_DIAG_FRAME_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[cfg(target_os = "android")]
+static ANDROID_DIAG_STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(target_os = "android")]
+fn android_diag_elapsed_ms() -> u64 {
+    ANDROID_DIAG_START.get_or_init(std::time::Instant::now).elapsed().as_millis() as u64
+}
+
+#[cfg(target_os = "android")]
+pub(super) fn android_diag_event_loop() {
+    ANDROID_DIAG_EVENT_COUNT.fetch_add(1, Ordering::Relaxed);
+    ANDROID_DIAG_EVENT_MS.store(android_diag_elapsed_ms(), Ordering::Relaxed);
+}
+
+#[cfg(target_os = "android")]
+fn android_diag_frame() {
+    ANDROID_DIAG_FRAME_COUNT.fetch_add(1, Ordering::Relaxed);
+    ANDROID_DIAG_FRAME_MS.store(android_diag_elapsed_ms(), Ordering::Relaxed);
+}
+
+#[cfg(target_os = "android")]
+pub fn start_android_diagnostics(path: std::path::PathBuf) {
+    use std::io::Write as _;
+    ANDROID_DIAG_START.get_or_init(std::time::Instant::now);
+    ANDROID_DIAG_EVENT_COUNT.store(0, Ordering::Relaxed);
+    ANDROID_DIAG_FRAME_COUNT.store(0, Ordering::Relaxed);
+    ANDROID_DIAG_EVENT_MS.store(0, Ordering::Relaxed);
+    ANDROID_DIAG_FRAME_MS.store(0, Ordering::Relaxed);
+    ANDROID_DIAG_STOP.store(false, Ordering::Relaxed);
+    if let Err(error) = std::thread::Builder::new()
+        .name("horizon-android-watchdog".into())
+        .spawn(move || {
+            let mut previous_events = 0;
+            let mut previous_frames = 0;
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                if ANDROID_DIAG_STOP.load(Ordering::Relaxed) {
+                    break;
+                }
+                let events = ANDROID_DIAG_EVENT_COUNT.load(Ordering::Relaxed);
+                let frames = ANDROID_DIAG_FRAME_COUNT.load(Ordering::Relaxed);
+                let now = android_diag_elapsed_ms();
+                let event_age = now.saturating_sub(ANDROID_DIAG_EVENT_MS.load(Ordering::Relaxed));
+                let frame_age = now.saturating_sub(ANDROID_DIAG_FRAME_MS.load(Ordering::Relaxed));
+                let line = format!(
+                    "DIAG t={now}ms event_ticks={events} event_delta={} event_age={event_age}ms frame_ticks={frames} frame_delta={} frame_age={frame_age}ms\\n",
+                    events.saturating_sub(previous_events),
+                    frames.saturating_sub(previous_frames),
+                );
+                previous_events = events;
+                previous_frames = frames;
+                if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+                    let _ = file.write_all(line.as_bytes());
+                    let _ = file.flush();
+                }
+            }
+        })
+    {
+        log::error!("Horizon Android: cannot start diagnostic watchdog: {error}");
+    }
+}
+
+#[cfg(target_os = "android")]
+pub fn stop_android_diagnostics() {
+    ANDROID_DIAG_STOP.store(true, Ordering::Relaxed);
 }

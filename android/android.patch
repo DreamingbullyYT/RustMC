@@ -188,6 +188,7 @@ index dd91773a0..16b8abe82 100644
 +use android::new_event_loop as android_new_event_loop;
 +pub use android::{
 +    android_cursor_grabbing, android_game_fps, android_hotbar_rect, android_ime_allowed,
++    start_android_diagnostics, stop_android_diagnostics,
 +    send_android_control_event, send_android_look, send_android_menu_touch,
 +    set_android_app, set_android_haptic_callback, set_android_ime_allowed, set_android_look_active,
 +};
@@ -240,6 +241,7 @@ index dd91773a0..16b8abe82 100644
      fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
 +        #[cfg(target_os = "android")]
 +        self.android_poll_input(event_loop);
++        android::android_diag_event_loop();
          self.idle(event_loop);
      }
      /// The application is ending. On macOS, Quit (Cmd+Q) ends it through
