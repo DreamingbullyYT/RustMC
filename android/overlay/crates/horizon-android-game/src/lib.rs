@@ -298,10 +298,19 @@ pub fn android_main(app: winit::platform::android::activity::AndroidApp) {
         log::error!("Horizon Android: cannot enter game directory: {error}");
         return;
     }
-    if let Ok(accounts) = std::fs::read(launcher.join("accounts.json"))
-        && let Ok(value) = serde_json::from_slice::<serde_json::Value>(&accounts)
-        && let Some(name) = value.get("offline_selected").and_then(|v| v.as_str())
-    {
+    // Android offline profiles live outside upstream accounts.json so desktop account
+    // saves cannot erase them. Keep the legacy field as a migration fallback.
+    let offline_profile = std::fs::read(launcher.join("android-offline-profiles.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|value| value.get("selected").and_then(|v| v.as_str()).map(str::to_owned))
+        .or_else(|| {
+            std::fs::read(launcher.join("accounts.json"))
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+                .and_then(|value| value.get("offline_selected").and_then(|v| v.as_str()).map(str::to_owned))
+        });
+    if let Some(name) = offline_profile {
         unsafe { std::env::set_var("HORIZON_PLAYER_NAME", name) };
     }
     if let Ok(controls) = std::fs::read(launcher.join("android-touch-controls.json"))

@@ -541,6 +541,9 @@ class MainActivity : ComponentActivity() {
                             .setPositiveButton("Continue") { _, _ ->
                                 run("Completing Microsoft sign-in") {
                                     val name = MicrosoftAuth.complete()
+                                    // A successful Microsoft sign-in selects that identity in the
+                                    // upstream account store; clear any Android-only offline override.
+                                    Core.playAsGameName()
                                     refreshDashboardState()
                                     "Signed in as $name."
                                 }

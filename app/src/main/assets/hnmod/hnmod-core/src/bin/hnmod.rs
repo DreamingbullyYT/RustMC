@@ -18,11 +18,17 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some("inspect") => {
             let archive = args.next().ok_or("usage: hnmod inspect FILE.hnmod")?;
             if args.next().is_some() { return Err("too many arguments".into()); }
-            let bundle = read_bundle(std::fs::File::open(archive)?)?;
-            println!("{}", serde_json::to_string(&json!({
-                "manifest": bundle.manifest,
-                "sha256": bundle.sha256
-            }))?);
+            // Current .hmod packages print their own summary; legacy .hnmod keeps its original output.
+            if let hmod @ horizon_hnmod_core::hmod::Inspected::Hmod { .. } =
+                horizon_hnmod_core::hmod::inspect(std::fs::File::open(&archive)?)? {
+                println!("{}", serde_json::to_string(&hmod)?);
+            } else {
+                let bundle = read_bundle(std::fs::File::open(archive)?)?;
+                println!("{}", serde_json::to_string(&json!({
+                    "manifest": bundle.manifest,
+                    "sha256": bundle.sha256
+                }))?);
+            }
         }
         Some("extract") => {
             let archive = args.next().ok_or("usage: hnmod extract FILE.hnmod NEW_DIRECTORY")?;

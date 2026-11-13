@@ -1,8 +1,8 @@
 diff --git a/Cargo.toml b/Cargo.toml
-index 1944ef889..d29d9d4cd 100644
+index 828c7d85af..db88fae44f 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -9,6 +9,8 @@ members = [
+@@ -10,6 +10,8 @@ members = [
      "crates/horizon-world",
      "crates/horizon-client",
      "crates/horizon-client-lib",
@@ -12,19 +12,20 @@ index 1944ef889..d29d9d4cd 100644
      "crates/horizon-client-input",
      "crates/horizon-client-render",
 diff --git a/crates/horizon-client-input/Cargo.toml b/crates/horizon-client-input/Cargo.toml
-index e1d7cf72b..47ec435b8 100644
+index 4454e94131..0eabc523a7 100644
 --- a/crates/horizon-client-input/Cargo.toml
 +++ b/crates/horizon-client-input/Cargo.toml
-@@ -12,12 +12,14 @@ winit = "0.30.13"
- # The window icon.
- horizon-theme = { path = "../horizon-theme" }
+@@ -10,7 +10,6 @@ description = "The client's input layer: key bindings and their names, mouse, co
+ horizon-client-core = { path = "../horizon-client-core" }
+ winit = "0.30.13"
  png = "0.18"
 -arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
- # The DualSense's trigger effects (the `controllers` feature).
- horizon-dualsense = { path = "../horizon-dualsense", optional = true }
  
+ [dev-dependencies]
+ # The window icon test decodes Horizon's icon.
+@@ -19,5 +18,8 @@ horizon-theme = { path = "../horizon-theme" }
  [features]
- controllers = ["dep:horizon-dualsense"]
+ controllers = []
  
 +[target.'cfg(not(target_os = "android"))'.dependencies]
 +arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
@@ -32,7 +33,7 @@ index e1d7cf72b..47ec435b8 100644
  [lints]
  workspace = true
 diff --git a/crates/horizon-client-input/src/clipboard.rs b/crates/horizon-client-input/src/clipboard.rs
-index eaf2a2274..3c3199518 100644
+index eaf2a2274f..3c31995187 100644
 --- a/crates/horizon-client-input/src/clipboard.rs
 +++ b/crates/horizon-client-input/src/clipboard.rs
 @@ -125,6 +125,7 @@ pub trait Clipboard {
@@ -92,10 +93,10 @@ index eaf2a2274..3c3199518 100644
              && system.set_text(text.to_owned()).is_err()
          {
 diff --git a/crates/horizon-client-input/src/keybinds.rs b/crates/horizon-client-input/src/keybinds.rs
-index 439df2a0b..601b92bdf 100644
+index 215d8bb1f1..c28fa820bc 100644
 --- a/crates/horizon-client-input/src/keybinds.rs
 +++ b/crates/horizon-client-input/src/keybinds.rs
-@@ -288,6 +288,8 @@ pub use horizon_client_core::key_display::display_name;
+@@ -299,6 +299,8 @@ pub use horizon_client_core::key_display::display_name;
  /// that key from now on (`key_display::learn_layout`), so an AZERTY player's
  /// Q key shows A.
  pub fn learn_layout(event: &winit::event::KeyEvent) {
@@ -104,7 +105,7 @@ index 439df2a0b..601b92bdf 100644
      use winit::keyboard::{Key, PhysicalKey};
      use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
      let PhysicalKey::Code(code) = event.physical_key else {
-@@ -302,6 +304,9 @@ pub fn learn_layout(event: &winit::event::KeyEvent) {
+@@ -313,6 +315,9 @@ pub fn learn_layout(event: &winit::event::KeyEvent) {
          Key::Dead(Some(c)) => learn(name, c.encode_utf8(&mut [0; 4])),
          _ => {}
      }
@@ -115,10 +116,10 @@ index 439df2a0b..601b92bdf 100644
  
  /// Current bindings by mapping name.
 diff --git a/crates/horizon-client-render/src/gfx.rs b/crates/horizon-client-render/src/gfx.rs
-index cf62c2528..ca5ef1c2f 100644
+index 2eb5f970b9..036289816d 100644
 --- a/crates/horizon-client-render/src/gfx.rs
 +++ b/crates/horizon-client-render/src/gfx.rs
-@@ -4580,6 +4580,15 @@ impl Renderer {
+@@ -5300,6 +5300,15 @@ impl Renderer {
              .unwrap_or_else(std::sync::PoisonError::into_inner) =
              self.surface.take().and_then(|s| Arc::try_unwrap(s).ok());
      }
@@ -135,10 +136,10 @@ index cf62c2528..ca5ef1c2f 100644
      pub fn recreate_surface(&mut self) -> Result<()> {
          self.queue.wait();
 diff --git a/crates/horizon-client/src/entry.rs b/crates/horizon-client/src/entry.rs
-index 2fd12c0c6..b25fcb7b8 100644
+index b2b40f7a1e..b086e095c6 100644
 --- a/crates/horizon-client/src/entry.rs
 +++ b/crates/horizon-client/src/entry.rs
-@@ -190,6 +190,8 @@ pub fn main_with(mods: crate::mod_api::Mods) {
+@@ -315,6 +315,8 @@ pub fn main_with(mods: crate::mod_api::Mods) {
              eprintln!("Press Enter to close.");
              let _ = std::io::stdin().read_line(&mut String::new());
          }
@@ -148,10 +149,10 @@ index 2fd12c0c6..b25fcb7b8 100644
              game::exit_code::USAGE
          } else {
 diff --git a/crates/horizon-client/src/game/ime.rs b/crates/horizon-client/src/game/ime.rs
-index f3109ef93..83d426823 100644
+index 02acdc1d8b..490e37325a 100644
 --- a/crates/horizon-client/src/game/ime.rs
 +++ b/crates/horizon-client/src/game/ime.rs
-@@ -45,6 +45,8 @@ impl Game<'_> {
+@@ -47,6 +47,8 @@ impl Game<'_> {
      /// Allow the input method only while a text box has focus.
      pub(super) fn sync_ime(&mut self) {
          let want = self.text_field_focused();
@@ -160,7 +161,7 @@ index f3109ef93..83d426823 100644
          if want != self.ime_allowed
              && let Some(window) = &self.window
          {
-@@ -74,6 +76,8 @@ impl Game<'_> {
+@@ -80,6 +82,8 @@ impl Game<'_> {
      /// (`TextInputManager.setTextInputArea`, in window pixels).
      pub(super) fn flush_ime(&mut self, hud: &mut HudBatch) {
          preedit::draw_overlay(hud, &self.gui.atlas);
@@ -170,10 +171,10 @@ index f3109ef93..83d426823 100644
              return;
          };
 diff --git a/crates/horizon-client/src/game/no_resources.rs b/crates/horizon-client/src/game/no_resources.rs
-index 12e1cf5b0..c3ef8e593 100644
+index 30cbd0bb99..846270bfb1 100644
 --- a/crates/horizon-client/src/game/no_resources.rs
 +++ b/crates/horizon-client/src/game/no_resources.rs
-@@ -32,7 +32,7 @@ pub(super) fn show(looked_in: &std::path::Path, settings: &Settings) -> Result<(
+@@ -37,7 +37,7 @@ pub(super) fn show(looked_in: &std::path::Path, settings: &Settings) -> Result<(
          error: None,
      };
      horizon_client::hud::GUI_SCALE.store(settings.gui_scale, Ordering::Relaxed);
@@ -183,10 +184,10 @@ index 12e1cf5b0..c3ef8e593 100644
  }
  
 diff --git a/crates/horizon-client/src/game/split.rs b/crates/horizon-client/src/game/split.rs
-index 5a9682e99..9d7f537cd 100644
+index bd15a56ede..28d204fa65 100644
 --- a/crates/horizon-client/src/game/split.rs
 +++ b/crates/horizon-client/src/game/split.rs
-@@ -595,6 +595,10 @@ impl<'a> Split<'a> {
+@@ -604,6 +604,10 @@ impl<'a> Split<'a> {
  }
  
  impl ApplicationHandler for Split<'_> {
@@ -198,10 +199,10 @@ index 5a9682e99..9d7f537cd 100644
          self.host.resumed(event_loop);
          if !self.surfaces.is_empty() {
 diff --git a/launcher/src/lib.rs b/launcher/src/lib.rs
-index 4ad7fcd5d..8efd75a0b 100644
+index 0eb15c6afb..e7f1034e6e 100644
 --- a/launcher/src/lib.rs
 +++ b/launcher/src/lib.rs
-@@ -8,7 +8,7 @@ pub mod datapacks;
+@@ -9,7 +9,7 @@ pub mod datapacks;
  pub mod desktop;
  pub mod desktop_seams;
  pub mod export;

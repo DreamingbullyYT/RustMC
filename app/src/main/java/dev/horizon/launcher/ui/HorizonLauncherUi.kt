@@ -168,7 +168,7 @@ fun HorizonLauncherUi(
                                 HomeTab.CONTROLS -> ControlsPage(touchControls, onSaveTouchControls, onOpenControlsEditor)
                                 HomeTab.SETTINGS -> SettingsPage(
                                     playerName, accounts, renderApi, onSetRenderApi, telemetry, onSetTelemetry,
-                                    platform, onExportBackup, onRestoreBackup, onShowGameLog
+                                    platform, onExportBackup, onRestoreBackup, onShowGameLog, onShowBuildLog
                                 ) { accountsOpen = true }
                             }
                         }
@@ -466,7 +466,7 @@ private fun ControlsPage(controls: TouchControlsInfo?, onSave: (JSONObject) -> U
 private fun SettingsPage(
     playerName: String, accounts: AccountsInfo?, renderApi: String, onSetRenderApi: (String) -> Unit,
     telemetry: TelemetryInfo?, onSetTelemetry: (Boolean) -> Unit, platform: PlatformInfo?,
-    onExportBackup: () -> Unit, onRestoreBackup: () -> Unit, onShowGameLog: () -> Unit, onOpenAccounts: () -> Unit
+    onExportBackup: () -> Unit, onRestoreBackup: () -> Unit, onShowGameLog: () -> Unit, onBuildLog: () -> Unit, onOpenAccounts: () -> Unit
 ) {
     val apiKeys = listOf("auto", "vulkan", "opengl")
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
@@ -494,6 +494,8 @@ private fun SettingsPage(
         ToggleRow("Share anonymous diagnostics", telemetry?.any ?: false, onSetTelemetry)
         SectionLabel("Help")
         ActionPill("View last game log", Icons.Default.Description, onShowGameLog, Modifier.fillMaxWidth())
+        Spacer(Modifier.height(8.dp))
+        ActionPill("Live build log", Icons.Default.Description, onBuildLog, Modifier.fillMaxWidth())
         if (platform != null) Text("Horizon ${platform.version}", color = MutedInk, fontSize = 11.sp, modifier = Modifier.padding(top = 18.dp, bottom = 20.dp))
     }
 }
