@@ -292,13 +292,95 @@ fn touch_controls_save(settings: &AndroidTouchControls) -> Result<(), String> {
     std::fs::rename(temp, path).map_err(|e| e.to_string())
 }
 
+// Android keeps offline identities beside, not inside, Horizon's desktop accounts.json.
+// The upstream launcher deliberately removed offline accounts; this Android-only store prevents
+// Android compatibility from changing PC account semantics or being erased by Accounts::save().
+#[derive(Clone, Debug, Default, Serialize, serde::Deserialize)]
+#[serde(default)]
+struct AndroidOfflineProfiles {
+    names: Vec<String>,
+    selected: Option<String>,
+}
+
+static ANDROID_OFFLINE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn android_offline_path() -> PathBuf {
+    backend::data_dir().join("android-offline-profiles.json")
+}
+
+fn android_offline_load() -> AndroidOfflineProfiles {
+    let path = android_offline_path();
+    if path.is_file() {
+        return std::fs::read(&path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default();
+    }
+
+    // One-time migration from the older launcher's accounts.json format, before an upstream
+    // Accounts::save() drops those legacy fields.
+    let legacy = backend::data_dir().join("accounts.json");
+    let migrated = std::fs::read(&legacy)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .map(|value| {
+            let names = value
+                .get("offline")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            let selected = value
+                .get("offline_selected")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            AndroidOfflineProfiles { names, selected }
+        })
+        .unwrap_or_default();
+    if !migrated.names.is_empty() || migrated.selected.is_some() {
+        let _ = android_offline_save(&migrated);
+    }
+    migrated
+}
+
+fn android_offline_save(profiles: &AndroidOfflineProfiles) -> Result<(), String> {
+    let path = android_offline_path();
+    let parent = path.parent().ok_or("offline profiles path has no parent")?;
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec_pretty(profiles).map_err(|e| e.to_string())?;
+    let temp = path.with_extension(format!("json.{}.tmp", std::process::id()));
+    if let Err(error) = std::fs::write(&temp, bytes).and_then(|()| std::fs::rename(&temp, &path)) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(error.to_string());
+    }
+    Ok(())
+}
+
+fn validate_offline_name(name: &str) -> Result<String, String> {
+    let name = name.trim();
+    if !(3..=16).contains(&name.len())
+        || !name.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    {
+        return Err("Minecraft offline names must be 3–16 characters and use only A–Z, 0–9 or underscore.".into());
+    }
+    Ok(name.to_owned())
+}
+
 fn accounts_json() -> Result<String, String> {
     let accounts = Accounts::load();
     let selected = accounts.selected().map(|a| a.uuid.clone());
-    // Upstream removed offline names (Nov 9): the game plays only as a signed-in account that owns it.
-    let (kind, name) = match accounts.selected() {
-        Some(account) => ("microsoft", Some(account.name.clone())),
-        None => ("none", None),
+    let offline = android_offline_load();
+    let active_offline = offline.selected.as_ref().filter(|name| {
+        offline.names.iter().any(|saved| saved.eq_ignore_ascii_case(name))
+    });
+    let (kind, name) = if let Some(name) = active_offline {
+        ("offline", Some(name.clone()))
+    } else if let Some(account) = accounts.selected() {
+        ("microsoft", Some(account.name.clone()))
+    } else {
+        ("none", None)
     };
     let dto = json!({
         "accounts": accounts
@@ -307,8 +389,8 @@ fn accounts_json() -> Result<String, String> {
             .map(|a| json!({"uuid": a.uuid, "name": a.name}))
             .collect::<Vec<_>>(),
         "selected": selected,
-        "offline": Vec::<String>::new(),
-        "offlineSelected": Value::Null,
+        "offline": offline.names,
+        "offlineSelected": active_offline,
         "player": {"kind": kind, "name": name},
         "hasOwner": accounts.has_owner(account::store()),
         "keychain": account::store().persistent(),
@@ -317,11 +399,45 @@ fn accounts_json() -> Result<String, String> {
     serde_json::to_string(&dto).map_err(|e| e.to_string())
 }
 
-const NO_OFFLINE: &str =
-    "Offline names were removed from Horizon: sign in with a Microsoft account that owns Minecraft: Java Edition.";
+fn add_offline_profile(name: &str) -> Result<String, String> {
+    let name = validate_offline_name(name)?;
+    let _lock = ANDROID_OFFLINE_LOCK.lock().map_err(|_| "offline profile store is busy")?;
+    let mut profiles = android_offline_load();
+    if !profiles.names.iter().any(|saved| saved.eq_ignore_ascii_case(&name)) {
+        profiles.names.push(name);
+        android_offline_save(&profiles)?;
+    }
+    accounts_json()
+}
 
-fn keep_offline(_name: &str) -> Result<String, String> {
-    Err(NO_OFFLINE.to_string())
+fn select_offline_profile(name: &str) -> Result<String, String> {
+    let name = validate_offline_name(name)?;
+    let _lock = ANDROID_OFFLINE_LOCK.lock().map_err(|_| "offline profile store is busy")?;
+    let mut profiles = android_offline_load();
+    let saved = profiles.names.iter().find(|saved| saved.eq_ignore_ascii_case(&name))
+        .cloned().ok_or("That offline profile does not exist.")?;
+    profiles.selected = Some(saved);
+    android_offline_save(&profiles)?;
+    accounts_json()
+}
+
+fn remove_offline_profile(name: &str) -> Result<String, String> {
+    let _lock = ANDROID_OFFLINE_LOCK.lock().map_err(|_| "offline profile store is busy")?;
+    let mut profiles = android_offline_load();
+    profiles.names.retain(|saved| !saved.eq_ignore_ascii_case(name));
+    if profiles.selected.as_deref().is_some_and(|selected| selected.eq_ignore_ascii_case(name)) {
+        profiles.selected = None;
+    }
+    android_offline_save(&profiles)?;
+    accounts_json()
+}
+
+fn select_game_name() -> Result<String, String> {
+    let _lock = ANDROID_OFFLINE_LOCK.lock().map_err(|_| "offline profile store is busy")?;
+    let mut profiles = android_offline_load();
+    profiles.selected = None;
+    android_offline_save(&profiles)?;
+    accounts_json()
 }
 
 fn merge(base: &mut Value, patch: Value) {
@@ -632,7 +748,7 @@ pub extern "system" fn Java_dev_horizon_launcher_core_Native_nativeAddOfflineNam
         Ok(v) => v,
         Err(e) => return reply(&mut env, Err(e)),
     };
-    guarded(&mut env, || keep_offline(&name))
+    guarded(&mut env, || add_offline_profile(&name))
 }
 
 #[no_mangle]
@@ -645,7 +761,7 @@ pub extern "system" fn Java_dev_horizon_launcher_core_Native_nativePlayOfflineNa
         Ok(v) => v,
         Err(e) => return reply(&mut env, Err(e)),
     };
-    guarded(&mut env, || keep_offline(&name))
+    guarded(&mut env, || select_offline_profile(&name))
 }
 
 #[no_mangle]
@@ -658,10 +774,7 @@ pub extern "system" fn Java_dev_horizon_launcher_core_Native_nativeRemoveOffline
         Ok(v) => v,
         Err(e) => return reply(&mut env, Err(e)),
     };
-    guarded(&mut env, || {
-        let _ = &name;
-        Err(NO_OFFLINE.to_string())
-    })
+    guarded(&mut env, || remove_offline_profile(&name))
 }
 
 #[no_mangle]
@@ -669,9 +782,7 @@ pub extern "system" fn Java_dev_horizon_launcher_core_Native_nativePlayAsGameNam
     mut env: JNIEnv,
     _this: JObject,
 ) -> jstring {
-    guarded(&mut env, || {
-        Err(NO_OFFLINE.to_string())
-    })
+    guarded(&mut env, select_game_name)
 }
 
 #[no_mangle]
@@ -688,6 +799,12 @@ pub extern "system" fn Java_dev_horizon_launcher_core_Native_nativeSelectAccount
         let mut accounts = Accounts::load();
         accounts.play_as(&uuid)?;
         accounts.save()?;
+        {
+            let _lock = ANDROID_OFFLINE_LOCK.lock().map_err(|_| "offline profile store is busy")?;
+            let mut offline = android_offline_load();
+            offline.selected = None;
+            android_offline_save(&offline)?;
+        }
         accounts_json()
     })
 }
@@ -1154,17 +1271,34 @@ pub extern "system" fn Java_dev_horizon_launcher_core_Native_nativeLaunch(
     guarded(&mut env, || {
         let tag = backend::resolve_version(None)?;
         backend::need_prepared(&tag)?;
-        let game_session = account::session_for_game(&backend::game_home())
-            .map_err(|refused| match refused.keyring.clone() {
-                Some(why) => why,
-                None => refused.to_string(),
-            })?;
-        let offline = game_session.offline.clone();
+        let offline_name = {
+            let profiles = android_offline_load();
+            profiles.selected.filter(|name| profiles.names.iter().any(|saved| saved.eq_ignore_ascii_case(name)))
+        };
+        // A selected Android offline profile deliberately skips the Microsoft owner gate.
+        // The game already supports its normal offline path when no --session-file is supplied.
+        let game_session = if offline_name.is_some() {
+            None
+        } else {
+            Some(account::session_for_game(&backend::game_home())
+                .map_err(|refused| match refused.keyring.clone() {
+                    Some(why) => why,
+                    None => refused.to_string(),
+                })?)
+        };
+        let offline = offline_name.as_ref()
+            .map(|name| format!("Playing offline as {name}"))
+            .or_else(|| game_session.as_ref().and_then(|session| session.offline.clone()));
         let mut cmd = backend::client_command(&tag);
-        if let Some(file) = game_session.file {
-            cmd.arg("--session-file").arg(file);
+        if let Some(name) = offline_name {
+            cmd.arg("--name").arg(name);
         }
-        cmd.envs(game_session.env);
+        if let Some(session) = game_session {
+            if let Some(file) = session.file {
+                cmd.arg("--session-file").arg(file);
+            }
+            cmd.envs(session.env);
+        }
         // Keep the Android controls editor connected to the game launch contract. The
         // Android game target can read this profile before creating its input layer.
         let touch_controls = touch_controls_load()?;
