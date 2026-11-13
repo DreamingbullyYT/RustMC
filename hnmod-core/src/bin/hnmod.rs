@@ -15,6 +15,12 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
+        Some("inspect-hpack") => {
+            let archive = args.next().ok_or("usage: hnmod inspect-hpack FILE.hpack")?;
+            if args.next().is_some() { return Err("too many arguments".into()); }
+            let report = horizon_hnmod_core::hpack::inspect(std::fs::File::open(archive)?)?;
+            println!("{}", serde_json::to_string(&report)?);
+        }
         Some("inspect-pack") => {
             let archive = args.next().ok_or("usage: hnmod inspect-pack FILE.mrpack")?;
             if args.next().is_some() { return Err("too many arguments".into()); }
@@ -145,6 +151,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         _ => {
             eprintln!("Usage:");
             eprintln!("  hnmod inspect FILE.hmod|FILE.hnmod");
+            eprintln!("  hnmod inspect-hpack FILE.hpack");
             eprintln!("  hnmod inspect-pack FILE.mrpack");
             eprintln!("  hnmod extract FILE.hnmod NEW_DIRECTORY");
             eprintln!("  hnmod prepare MODS_DIRECTORY PLAN.json");
