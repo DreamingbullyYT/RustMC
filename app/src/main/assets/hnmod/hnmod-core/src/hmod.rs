@@ -221,7 +221,7 @@ mod tests {
         Cursor::new(z.finish().unwrap().into_inner())
     }
     fn native_toml(extra: &str) -> String {
-        format!("id = \"demo\"\nname = \"Demo\"\nversion = \"1.2.3\"\ndescription = \"Demo mod\"\nauthors = [\"Test\"]\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {}\n{extra}\n[native]\ngame = \"26.3\"\nhorizon = \"{}\"\nmixins = \"{}\"\n",
+        format!("id = \"demo\"\nname = \"Demo\"\nversion = \"1.2.3\"\ndescription = \"Demo mod\"\nauthors = [\"Test\"]\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {{}}\n{extra}\n[native]\ngame = \"26.3\"\nhorizon = \"{}\"\nmixins = \"{}\"\n",
             "a".repeat(40), "b".repeat(40))
     }
     #[test] fn native_mod_with_mixin_rows() {
@@ -260,7 +260,7 @@ mod tests {
     #[test] fn wasm_hash_is_checked() {
         let wasm = b"\0asm\x01\0\0\0";
         let good = format!("{:x}", Sha512::digest(wasm));
-        let t = |h: &str| format!("id = \"w\"\nname = \"Wasm\"\nversion = \"1.0.0\"\ndescription = \"Wasm mod\"\nauthors = []\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {}\n[wasm]\nsha512 = \"{h}\"\ntoolchain = \"x\"\n");
+        let t = |h: &str| format!("id = \"w\"\nname = \"Wasm\"\nversion = \"1.0.0\"\ndescription = \"Wasm mod\"\nauthors = []\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {{}}\n[wasm]\nsha512 = \"{h}\"\ntoolchain = \"x\"\n");
         let ok = zip_of(&[(HMOD_MANIFEST, t(&good).as_bytes()), ("mod.wasm", wasm)]);
         assert!(read_hmod(ok).is_ok());
         let bad = zip_of(&[(HMOD_MANIFEST, t(&"0".repeat(128)).as_bytes()), ("mod.wasm", wasm)]);
