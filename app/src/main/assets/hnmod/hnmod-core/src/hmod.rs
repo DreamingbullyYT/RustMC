@@ -27,6 +27,7 @@ pub struct Native {
     #[serde(default)] pub mixin: Vec<Row>,
     #[serde(default, rename = "loop")] pub loops: Vec<Row>,
     #[serde(default)] pub bridge: Vec<Row>,
+    #[serde(default)] pub state: Vec<Row>,
     #[serde(default)] pub module: Vec<Row>,
 }
 
@@ -53,6 +54,16 @@ pub struct HmodManifest {
     #[serde(default)] pub name: String,
     pub version: String,
     pub api: String,
+    #[serde(default)] pub description: String,
+    #[serde(default)] pub authors: Vec<String>,
+    #[serde(default)] pub license: String,
+    #[serde(default)] pub license_url: Option<String>,
+    #[serde(default)] pub credits: String,
+    #[serde(default)] pub homepage: Option<String>,
+    #[serde(default)] pub issues: Option<String>,
+    #[serde(default)] pub side: String,
+    #[serde(default)] pub namespaces: Vec<String>,
+    #[serde(default)] pub jar: Vec<toml::Value>,
     #[serde(default)] pub capabilities: Vec<String>,
     #[serde(default)] pub native: Option<Native>,
     #[serde(default)] pub wasm: Option<Wasm>,
@@ -106,7 +117,7 @@ impl HmodManifest {
             if n.game.trim().is_empty() { return bad("[native].game must not be empty"); }
             if !is_revision(&n.horizon) { return bad("[native].horizon must be a 40-character lowercase commit ID"); }
             if !is_revision(&n.mixins) { return bad("[native].mixins must be a 40-character lowercase commit ID"); }
-            for r in n.mixin.iter().chain(&n.loops).chain(&n.bridge).chain(&n.module) { row(&r.id)?; }
+            for r in n.mixin.iter().chain(&n.loops).chain(&n.bridge).chain(&n.state).chain(&n.module) { row(&r.id)?; }
         }
         if let Some(w) = &self.wasm {
             if !is_hex(&w.sha512, 128) { return bad("[wasm].sha512 must be 128 lowercase hex characters"); }
@@ -212,6 +223,15 @@ mod tests {
         let m = HmodManifest::parse(&t).unwrap();
         assert_eq!(m.native.as_ref().unwrap().mixin[0].id, "m1");
         assert_eq!(m.native.unwrap().loops[0].id, "l1");
+    }
+
+    #[test] fn accepts_nov12_manifest_metadata_and_state_rows() {
+        let t = native_toml("")
+            + "description = \"A current native mod\"\nauthors = [\"Author\"]\nlicense = \"MIT\"\nside = \"client\"\nnamespaces = [\"demo\"]\n"
+            + "[[native.state]]\nid = \"state\"\ntype = \"u32\"\n";
+        let m = HmodManifest::parse(&t).unwrap();
+        assert_eq!(m.side, "client");
+        assert_eq!(m.native.unwrap().state[0].id, "state");
     }
     #[test] fn removed_fields_are_named() {
         let t = native_toml("") + "[[inject]]\nid = \"i\"\nat = \"a\"\nkind = \"head\"\nwith = \"w\"\naccess = \"internals\"\n";
