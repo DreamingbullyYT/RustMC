@@ -45,14 +45,14 @@ PY
   printf '%s' "$HORIZON_FORK_RELEASE_KEY_B64" | base64 -d > "$raw"
   [[ $(wc -c < "$raw" | tr -d ' ') == 32 ]] || { echo "Invalid built-in Ed25519 release key" >&2; return 1; }
   # Ed25519 SubjectPublicKeyInfo DER prefix followed by the raw 32-byte public key.
-  { printf '\\060\\052\\060\\005\\006\\003\\053\\145\\160\\003\\041\\000'; cat "$raw"; } > "$der"
+  { printf '\060\\052\060\\005\\006\\003\\053\\145\\160\\003\\041\\000'; cat "$raw"; } > "$der"
   {
-    printf '%s\\n' '-----BEGIN PUBLIC KEY-----'
+    printf '%s\n' '-----BEGIN PUBLIC KEY-----'
     base64 < "$der"
-    printf '%s\\n' '-----END PUBLIC KEY-----'
+    printf '%s\n' '-----END PUBLIC KEY-----'
   } > "$pem"
 
-  { printf 'horizon release %s\\n' "$tag"; cat "$sums"; } > "$message"
+  { printf 'horizon release %s\n' "$tag"; cat "$sums"; } > "$message"
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -n "$line" ]] || continue
     if printf '%s' "$line" | base64 -d > "$signature" 2>/dev/null &&
