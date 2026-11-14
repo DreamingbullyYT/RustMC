@@ -152,7 +152,7 @@ def validate_index(release_dir: Path, commit: str, target: str) -> dict:
         fail("SDK index has an unsupported package format")
     if not isinstance(index.get("content_api"), str) or not index["content_api"]:
         fail("SDK index is missing content API identity")
-    if not isinstance((index.get("surface") or {}).get("hash"), str):
+    if not re.fullmatch(r"[0-9a-f]{64}", (index.get("surface") or {}).get("hash", "")):
         fail("SDK index is missing surface identity")
     mixins = index.get("mixins") or {}
     if not re.fullmatch(r"[0-9a-f]{40}", mixins.get("rev", "")):
