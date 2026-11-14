@@ -10,6 +10,10 @@ on:
       - "android/overlay/**"
       - "app/src/main/assets/hnmod/android/**"
       - "app/src/main/assets/hnmod/hnmod-core/**"
+      - "android/termux/native-sdk.sh"
+      - "android/termux/install-native-sdk.py"
+      - "app/src/main/assets/hnmod/android/termux/native-sdk.sh"
+      - "app/src/main/assets/hnmod/android/termux/install-native-sdk.py"
       - "app/src/main/java/dev/horizon/launcher/data/**"
       - "app/src/main/java/dev/horizon/launcher/MainActivity.kt"
       - "app/src/main/java/dev/horizon/launcher/ui/**"
@@ -137,6 +141,9 @@ jobs:
           embedded=$(cat app/src/main/assets/hnmod/android/termux/native-sdk.sh)
           source=$(cat android/termux/native-sdk.sh)
           test "$embedded" = "$source"
+          python3 -m py_compile android/termux/install-native-sdk.py
+          cmp android/termux/install-native-sdk.py app/src/main/assets/hnmod/android/termux/install-native-sdk.py
+          cmp android/termux/native-sdk.sh app/src/main/assets/hnmod/android/termux/native-sdk.sh
       - name: Test authenticated native SDK download, validation, extraction and rollback safety
         shell: bash
         run: |
