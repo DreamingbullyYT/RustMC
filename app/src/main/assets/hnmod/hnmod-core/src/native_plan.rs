@@ -102,3 +102,63 @@ pub fn resolve(
 
     Ok(NativeBuildPlan { game, horizon, mixins, mods, dependency_order, build_key })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hmod::{read_hmod, HMOD_MANIFEST};
+    use std::io::{Cursor, Write};
+    use zip::{write::SimpleFileOptions, ZipWriter};
+
+    fn archive(id: &str, version: &str, horizon: &str, mixins: &str, dependencies: &str) -> Hmod {
+        let manifest = format!(
+            "id = \"{id}\"\nversion = \"{version}\"\napi = \"0.2\"\n[native]\ngame = \"26.3\"\nhorizon = \"{horizon}\"\nmixins = \"{mixins}\"\n{dependencies}"
+        );
+        let cargo = "[package]\nname = \"test-mod\"\nversion = \"0.1.0\"\nedition = \"2024\"\n";
+        let mut out = Cursor::new(Vec::new());
+        {
+            let mut zip = ZipWriter::new(&mut out);
+            let options = SimpleFileOptions::default();
+            zip.start_file(HMOD_MANIFEST, options).unwrap();
+            zip.write_all(manifest.as_bytes()).unwrap();
+            zip.start_file("Cargo.toml", options).unwrap();
+            zip.write_all(cargo.as_bytes()).unwrap();
+            zip.start_file("src/lib.rs", options).unwrap();
+            zip.write_all(b"pub struct Mod;").unwrap();
+            zip.finish().unwrap();
+        }
+        read_hmod(Cursor::new(out.into_inner())).unwrap()
+    }
+
+    #[test]
+    fn resolves_multiple_mods_in_dependency_order_and_stable_key() {
+        let base = archive("base", "1.2.0", &"a".repeat(40), &"b".repeat(40), "");
+        let consumer = archive("consumer", "1.0.0", &"a".repeat(40), &"b".repeat(40),
+            "[dependencies]\nbase = \"^1.0\"\n");
+        let first = resolve(&[consumer.clone(), base.clone()], "aarch64-linux-android", "fast", "sdk-sha")
+            .unwrap();
+        let second = resolve(&[base, consumer], "aarch64-linux-android", "fast", "sdk-sha")
+            .unwrap();
+        assert_eq!(first.dependency_order, ["base", "consumer"]);
+        assert_eq!(first.build_key, second.build_key);
+        assert_eq!(first.mods, ["base", "consumer"]);
+    }
+
+    #[test]
+    fn rejects_mixed_game_build_pins() {
+        let one = archive("one", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
+        let two = archive("two", "1.0.0", &"c".repeat(40), &"b".repeat(40), "");
+        let error = resolve(&[one, two], "aarch64-linux-android", "fast", "sdk-sha")
+            .unwrap_err().to_string();
+        assert!(error.contains("targets game/Horizon/mixins"));
+    }
+
+    #[test]
+    fn rejects_missing_required_dependency() {
+        let consumer = archive("consumer", "1.0.0", &"a".repeat(40), &"b".repeat(40),
+            "[dependencies]\nmissing = \"^1\"\n");
+        let error = resolve(&[consumer], "aarch64-linux-android", "fast", "sdk-sha")
+            .unwrap_err().to_string();
+        assert!(error.contains("requires missing mod missing"));
+    }
+}
