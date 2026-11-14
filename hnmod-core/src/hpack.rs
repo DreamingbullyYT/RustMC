@@ -219,14 +219,14 @@ fn github_repo(url: &str) -> Option<String> {
     let mut parts = rest.split('/');
     let owner = parts.next()?;
     let repo = parts.next()?;
-    if owner.is_empty() || repo.is_empty() || owner.contains(['?', '#', '\\\\']) || repo.contains(['?', '#', '\\\\']) {
+    if owner.is_empty() || repo.is_empty() || owner.contains('?') || owner.contains('#') || owner.contains('\\') || repo.contains('?') || repo.contains('#') || repo.contains('\\') {
         return None;
     }
     Some(format!("{owner}/{repo}"))
 }
 
 fn trusted_download(url: &str, file_name: &str, source: &str) -> bool {
-    if !url.starts_with("https://github.com/") || url.contains(['?', '#', '\\\\']) {
+    if !url.starts_with("https://github.com/") || url.contains('?') || url.contains('#') || url.contains('\\') {
         return false;
     }
     let Some(rest) = url.strip_prefix("https://github.com/") else { return false };
@@ -287,7 +287,7 @@ pub fn resolve(path: &std::path::Path, index_json: &str) -> Result<HpackInstallP
             || file.sha256.len() != 64
             || !file.sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
             || !file.name.ends_with(".hmod")
-            || file.name.contains(['/', '\\\\', ':'])
+            || file.name.contains('/') || file.name.contains('\\') || file.name.contains(':')
             || !trusted_download(&file.url, &file.name, &project.source)
         {
             return Err(format!("{} {} has an unsafe or invalid registry download record", pin.id, pin.version));
