@@ -230,14 +230,14 @@ fn trusted_download(url: &str, file_name: &str, source: &str) -> bool {
     }
     let Some(rest) = url.strip_prefix("https://github.com/") else { return false };
     let parts: Vec<_> = rest.split('/').collect();
-    if parts.len() < 7 || parts[2] != "releases" || parts[3] != "download" || parts[4].is_empty() {
+    if parts.len() != 6 || parts[2] != "releases" || parts[3] != "download" || parts[4].is_empty() {
         return false;
     }
     let repository = format!("{}/{}", parts[0], parts[1]);
     let official = repository == "horizon-rust/horizon-mods";
     let source_repo = github_repo(source).as_deref() == Some(repository.as_str());
-    official || source_repo
-        && parts.last().copied() == Some(file_name)
+    let correct_file = parts.last().copied() == Some(file_name);
+    correct_file && (official || source_repo)
 }
 
 fn parse_registry(index_json: &str) -> Result<RegistryIndex, String> {
@@ -340,6 +340,64 @@ mod tests {
     }
     fn manifest() -> String {
         format!("format = 1\nid = \"cozy\"\nname = \"Cozy\"\nversion = \"1.0.0\"\ngame = \"26.3\"\n[[mods]]\nid = \"coords_hud\"\nversion = \"0.1.0\"\nsha256 = \"{}\"\non = true\n", "a".repeat(64))
+    }
+
+    fn registry_index(hash: &str) -> String {
+        serde_json::json!({
+            "schema": 1,
+            "projects": [{
+                "id": "coords_hud",
+                "kind": "mod",
+                "source": "https://github.com/horizon-rust/horizon-mods",
+                "versions": [{
+                    "version": "0.1.0",
+                    "game": "26.3",
+                    "file": {
+                        "name": "coords_hud-0.1.0.hmod",
+                        "url": "https://github.com/horizon-rust/horizon-mods/releases/download/coords_hud-0.1.0/coords_hud-0.1.0.hmod",
+                        "size": 123,
+                        "sha256": hash
+                    }
+                }]
+            }]
+        }).to_string()
+    }
+
+    #[test]
+    fn resolves_hpack_exact_registry_pins() {
+        let dir = std::env::temp_dir().join(format!("hpack-plan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("cozy.hpack");
+        let mut zip = ZipWriter::new(std::fs::File::create(&path).unwrap());
+        zip.start_file(MANIFEST, SimpleFileOptions::default()).unwrap();
+        zip.write_all(manifest().as_bytes()).unwrap();
+        zip.finish().unwrap();
+        let plan = resolve(&path, &registry_index(&"a".repeat(64))).unwrap();
+        assert_eq!(plan.profile_id, "cozy");
+        assert_eq!(plan.mods[0].id, "coords_hud");
+        assert!(plan.mods[0].on);
+        assert!(resolve(&path, &registry_index(&"b".repeat(64))).unwrap_err().contains("SHA-256 differs"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_revoked_or_untrusted_registry_downloads() {
+        let dir = std::env::temp_dir().join(format!("hpack-plan-refuse-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("cozy.hpack");
+        let mut zip = ZipWriter::new(std::fs::File::create(&path).unwrap());
+        zip.start_file(MANIFEST, SimpleFileOptions::default()).unwrap();
+        zip.write_all(manifest().as_bytes()).unwrap();
+        zip.finish().unwrap();
+        let mut revoked: serde_json::Value = serde_json::from_str(&registry_index(&"a".repeat(64))).unwrap();
+        revoked["revoked"] = serde_json::json!([{"id":"coords_hud","sha256":null,"reason":"security issue","date":"2026-11-14"}]);
+        assert!(resolve(&path, &revoked.to_string()).unwrap_err().contains("was revoked"));
+        let mut untrusted: serde_json::Value = serde_json::from_str(&registry_index(&"a".repeat(64))).unwrap();
+        untrusted["projects"][0]["versions"][0]["file"]["url"] = serde_json::json!("https://evil.example/mod.hmod");
+        assert!(resolve(&path, &untrusted.to_string()).unwrap_err().contains("unsafe"));
+        std::fs::remove_dir_all(dir).unwrap();
     }
     #[test] fn reads_pinned_horizon_modpack() {
         let report = inspect(pack(&manifest(), "options.txt")).unwrap();
