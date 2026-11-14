@@ -303,7 +303,7 @@ pub fn resolve(path: &std::path::Path, index_json: &str) -> Result<HpackInstallP
         if file.size == 0 || file.size > 64 * 1024 * 1024
             || file.sha256.len() != 64
             || !file.sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            || !file.name.ends_with(".hmod")
+            || !(file.name.ends_with(".hmod") || (project.kind == "native-mod" && file.name.ends_with(".hnmod")))
             || file.name.contains('/') || file.name.contains('\\') || file.name.contains(':')
             || !trusted_download(&file.url, &file.name, &project.source)
         {
