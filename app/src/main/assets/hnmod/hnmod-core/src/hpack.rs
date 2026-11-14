@@ -171,6 +171,9 @@ struct RegistryProject {
 #[derive(Clone, Debug, Deserialize)]
 struct RegistryVersion {
     version: String,
+    api: String,
+    #[serde(default)] side: Option<String>,
+    #[serde(default)] capabilities: Vec<String>,
     game: String,
     file: RegistryFile,
 }
@@ -194,6 +197,9 @@ pub struct ResolvedPackMod {
     pub id: String,
     pub kind: String,
     pub version: String,
+    pub api: String,
+    pub side: String,
+    pub capabilities: Vec<String>,
     pub file_name: String,
     pub url: String,
     pub size: u64,
@@ -279,6 +285,17 @@ pub fn resolve(path: &std::path::Path, index_json: &str) -> Result<HpackInstallP
         if version.game != manifest.game {
             return Err(format!("{} {} targets game {}, but this pack targets {}", pin.id, pin.version, version.game, manifest.game));
         }
+        if version.api.trim().is_empty() {
+            return Err(format!("{} {} has no API identity in the registry index", pin.id, pin.version));
+        }
+        let side = version.side.as_deref()
+            .ok_or_else(|| format!("{} {} has no side declaration in the registry index", pin.id, pin.version))?;
+        if side == "server" {
+            return Err(format!("{} {} is server-only and cannot be installed in the Android client", pin.id, pin.version));
+        }
+        if !matches!(side, "client" | "both") {
+            return Err(format!("{} {} has an unsupported side declaration: {side}", pin.id, pin.version));
+        }
         let file = &version.file;
         if file.sha256 != pin.sha256 {
             return Err(format!("{} {} SHA-256 differs from the .hpack pin", pin.id, pin.version));
@@ -297,13 +314,19 @@ pub fn resolve(path: &std::path::Path, index_json: &str) -> Result<HpackInstallP
         }) {
             return Err(format!("{} {} was revoked: {}", pin.id, pin.version, revoked.reason));
         }
-        if project.key.is_some() && file.signature.as_deref().is_none_or(str::is_empty) {
-            return Err(format!("{} {} is missing its required minisign signature", pin.id, pin.version));
+        match (&project.key, &file.signature) {
+            (Some(_), Some(signature)) if !signature.trim().is_empty() => {}
+            (None, None) => {}
+            (Some(_), _) => return Err(format!("{} {} is missing its required minisign signature", pin.id, pin.version)),
+            (None, Some(_)) => return Err(format!("{} {} has a signature but the registry project has no public key", pin.id, pin.version)),
         }
         resolved.push(ResolvedPackMod {
             id: pin.id,
             kind: project.kind.clone(),
             version: pin.version,
+            api: version.api.clone(),
+            side: side.to_owned(),
+            capabilities: version.capabilities.clone(),
             file_name: file.name.clone(),
             url: file.url.clone(),
             size: file.size,
@@ -353,6 +376,9 @@ mod tests {
                 "source": "https://github.com/horizon-rust/horizon-mods",
                 "versions": [{
                     "version": "0.1.0",
+                    "api": "0.2",
+                    "side": "client",
+                    "capabilities": [],
                     "game": "26.3",
                     "file": {
                         "name": "coords_hud-0.1.0.hmod",
