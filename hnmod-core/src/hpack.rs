@@ -152,6 +152,10 @@ mod tests {
         assert_eq!(report.id, "cozy"); assert_eq!(report.mods.len(), 1);
         assert_eq!(report.overrides, ["options.txt"]);
     }
+    #[test] fn resourcepack_overrides_must_be_zip_files() {
+        assert!(inspect(pack(&manifest(), "resourcepacks/visual.zip")).is_ok());
+        assert!(inspect(pack(&manifest(), "resourcepacks/visual.txt")).unwrap_err().contains("not permitted"));
+    }
     #[test] fn refuses_unlisted_mod_settings_and_unknown_files() {
         assert!(inspect(pack(&manifest(), "horizon-mods/.horizon-mod-data/other/settings.json")).unwrap_err().contains("not permitted"));
         let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
