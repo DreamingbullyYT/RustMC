@@ -22,6 +22,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 MAX_MOD = 64 * 1024 * 1024
+MAX_TOTAL_MODS = 1024 * 1024 * 1024
 MAX_OVERRIDE = 64 * 1024 * 1024
 MAX_OVERRIDES = 256 * 1024 * 1024
 ALLOWED_REDIRECT_HOSTS = {
@@ -115,8 +116,9 @@ def inspect_hmod(cli: str, item: dict, archive: Path) -> None:
         fail(f"{item['id']}: native source package is not listed as native-mod")
 
 
-def extract_overrides(pack_path: Path, names: list[str], destination: Path) -> int:
+def extract_overrides(pack_path: Path, names: list[str], destination: Path) -> tuple[int, dict[str, str]]:
     total = 0
+    hashes = {}
     with zipfile.ZipFile(pack_path) as archive:
         all_names = archive.namelist()
         if len(all_names) != len(set(all_names)):
@@ -145,19 +147,23 @@ def extract_overrides(pack_path: Path, names: list[str], destination: Path) -> i
                     if count > MAX_OVERRIDE or total > MAX_OVERRIDES:
                         fail("hpack overrides exceed their actual expanded size limits")
                     output.write(block)
-    return total
+            hashes[relative] = sha256(target)
+    return total, hashes
 
 
-def updated_mod_list(profile: Path, mods: list[dict]) -> bytes:
+def updated_mod_list(profile: Path, mods: list[dict], remove_ids: set[str]) -> bytes:
     path = profile / "horizon-mods.txt"
+    if path.is_symlink():
+        fail("horizon-mods.txt is a symlink; refusing to read it")
     existing = path.read_text(encoding="utf-8") if path.is_file() else ""
-    changed = {f"mod.{item['id']}:" for item in mods}
+    changed_ids = remove_ids | {item["id"] for item in mods}
+    changed = {f"mod.{mod_id}:" for mod_id in changed_ids}
     lines = [line for line in existing.splitlines() if not any(line.strip().startswith(prefix) for prefix in changed)]
     lines.extend(f"mod.{item['id']}:{'true' if item['on'] else 'false'}" for item in mods)
     return (("\n".join(lines).rstrip() + "\n") if lines else "").encode("utf-8")
 
 
-def commit_files(profile: Path, staging: Path, relative_files: list[str]) -> None:
+def commit_files(profile: Path, staging: Path, relative_files: list[str], delete_files: list[str]) -> None:
     backup = staging / "backup"
     backup.mkdir()
     installed: list[Path] = []
@@ -181,6 +187,20 @@ def commit_files(profile: Path, staging: Path, relative_files: list[str]) -> Non
                 saved.append((saved_path, target))
             os.replace(source, target)
             installed.append(target)
+        for relative in delete_files:
+            rel = safe_relative(relative)
+            target = profile / rel
+            if target.is_symlink() or (target.exists() and not target.is_file()):
+                fail(f"refusing to delete a non-regular profile path: {target}")
+            if not target.exists():
+                continue
+            resolved_parent = target.parent.resolve()
+            if resolved_parent != root and root not in resolved_parent.parents:
+                fail(f"profile path escapes its root: {relative}")
+            saved_path = backup / rel
+            saved_path.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(target, saved_path)
+            saved.append((saved_path, target))
     except Exception:
         for target in reversed(installed):
             if target.exists():
@@ -215,6 +235,32 @@ def install(args) -> dict:
     if profile.is_symlink():
         fail("profile directory is a symlink")
     profile.mkdir(parents=True, exist_ok=True)
+    previous_receipt_path = profile / ".hpack-install.json"
+    if previous_receipt_path.is_symlink():
+        fail("previous Hpack receipt is a symlink")
+    previous_receipt = {}
+    if previous_receipt_path.is_file():
+        try:
+            previous_receipt = json.loads(previous_receipt_path.read_text(encoding="utf-8"))
+        except ValueError as error:
+            fail(f"previous Hpack receipt is invalid; refusing update: {error}")
+        if not isinstance(previous_receipt, dict) or not isinstance(previous_receipt.get("mods", []), list):
+            fail("previous Hpack receipt has an invalid mods list; refusing update")
+    previous_mod_ids = {
+        item.get("id") for item in previous_receipt.get("mods", [])
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+        and item.get("id").isascii() and item.get("id").replace("_", "").isalnum()
+        and item.get("id") == item.get("id").lower() and 1 <= len(item.get("id")) <= 64
+    }
+    previous_mod_paths = set()
+    for item in previous_receipt.get("mods", []):
+        if not isinstance(item, dict) or item.get("kind") not in ("mod", "native-mod") or item.get("id") not in previous_mod_ids:
+            continue
+        folder = "horizon-native-mods" if item["kind"] == "native-mod" else "horizon-mods"
+        previous_mod_paths.add(f"{folder}/{item['id']}.hmod")
+    previous_override_hashes = previous_receipt.get("overrides", {})
+    if not isinstance(previous_override_hashes, dict):
+        previous_override_hashes = {}
     staging = Path(tempfile.mkdtemp(prefix=".hpack-stage-", dir=profile))
     try:
         new_root = staging / "new"
@@ -222,8 +268,16 @@ def install(args) -> dict:
         downloaded = []
         signed_count = 0
         unsigned = []
+        total_mod_bytes = sum(item.get("size", 0) for item in plan["mods"])
+        if total_mod_bytes > MAX_TOTAL_MODS:
+            fail("Hpack mod downloads exceed the 1 GiB profile limit")
         for item in plan["mods"]:
-            archive = staging / item["file_name"]
+            filename = safe_relative(item["file_name"])
+            if len(filename.parts) != 1 or not item["file_name"].endswith(".hmod"):
+                fail(f"unsafe HMOD filename in install plan: {item['file_name']!r}")
+            if item.get("kind") not in ("mod", "native-mod"):
+                fail(f"unsupported registry mod kind: {item.get('kind')!r}")
+            archive = staging / filename
             download(item, archive)
             if verify_signature(item, archive, staging, args.minisign, args.allow_unsigned):
                 signed_count += 1
@@ -239,7 +293,7 @@ def install(args) -> dict:
 
         override_root = new_root / "overrides"
         override_root.mkdir()
-        override_bytes = extract_overrides(args.pack, plan["overrides"], override_root)
+        override_bytes, override_hashes = extract_overrides(args.pack, plan["overrides"], override_root)
         overrides = []
         for relative in plan["overrides"]:
             staged = override_root / safe_relative(relative)
@@ -249,7 +303,7 @@ def install(args) -> dict:
             overrides.append(relative)
         shutil.rmtree(override_root)
 
-        mod_list = updated_mod_list(profile, plan["mods"])
+        mod_list = updated_mod_list(profile, plan["mods"], previous_mod_ids)
         mod_list_path = new_root / "horizon-mods.txt"
         mod_list_path.write_bytes(mod_list)
         receipt = {
@@ -260,12 +314,23 @@ def install(args) -> dict:
             "content_fingerprint_sha256": plan["content_fingerprint_sha256"],
             "mods": [{"id": item["id"], "version": item["version"], "kind": item["kind"],
                       "sha256": item["sha256"], "on": item["on"]} for item in plan["mods"]],
-            "overrides": overrides,
+            "overrides": override_hashes,
         }
         receipt_path = new_root / ".hpack-install.json"
         receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True), encoding="utf-8")
         relative_files = downloaded + overrides + ["horizon-mods.txt", ".hpack-install.json"]
-        commit_files(profile, staging, relative_files)
+        new_mod_paths = set(downloaded)
+        stale_mod_paths = previous_mod_paths - new_mod_paths
+        new_override_paths = set(overrides)
+        stale_override_paths = []
+        for relative, old_hash in previous_override_hashes.items():
+            if relative in new_override_paths or not isinstance(old_hash, str):
+                continue
+            target = profile / safe_relative(relative)
+            if target.is_file() and not target.is_symlink() and sha256(target) == old_hash:
+                stale_override_paths.append(relative)
+        delete_files = sorted(stale_mod_paths | set(stale_override_paths))
+        commit_files(profile, staging, relative_files, delete_files)
         return {
             "profile": str(profile),
             "mods_installed": len(downloaded),
