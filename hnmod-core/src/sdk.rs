@@ -67,12 +67,45 @@ struct InstallReceipt {
     target: String,
     game_commit: String,
     mixins_rev: String,
+    files: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug)]
 pub struct VerifiedIdentity {
     pub index: SdkIndex,
     pub index_sha256: String,
+}
+
+
+fn hash_tree(root: &Path, current: &Path, output: &mut BTreeMap<String, String>) -> Result<(), String> {
+    let entries = std::fs::read_dir(current).map_err(|e| format!("{}: {e}", current.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        let kind = entry.file_type().map_err(|e| e.to_string())?;
+        if kind.is_symlink() {
+            return Err(format!("SDK cache contains a symlink: {}", path.display()));
+        }
+        if kind.is_dir() {
+            hash_tree(root, &path, output)?;
+        } else if kind.is_file() {
+            use std::io::Read;
+            let mut file = std::fs::File::open(&path).map_err(|e| e.to_string())?;
+            let mut digest = Sha256::new();
+            let mut buffer = [0u8; 64 * 1024];
+            loop {
+                let count = file.read(&mut buffer).map_err(|e| e.to_string())?;
+                if count == 0 { break; }
+                digest.update(&buffer[..count]);
+            }
+            let relative = path.strip_prefix(root).map_err(|e| e.to_string())?;
+            let key = relative.to_str().ok_or_else(|| "SDK cache path is not UTF-8".to_owned())?.replace('\\\\', "/");
+            output.insert(key, format!("{:x}", digest.finalize()));
+        } else {
+            return Err(format!("SDK cache contains a special file: {}", path.display()));
+        }
+    }
+    Ok(())
 }
 
 impl VerifiedIdentity {
@@ -102,6 +135,12 @@ impl VerifiedIdentity {
         }
         let identity = Self { index, index_sha256 };
         identity.validate()?;
+        let slices = directory.join("slices");
+        let mut files = BTreeMap::new();
+        hash_tree(&slices, &slices, &mut files)?;
+        if files != receipt.files {
+            return Err("SDK extracted files do not match the signed installation receipt".into());
+        }
         Ok(identity)
     }
 
@@ -210,7 +249,7 @@ mod tests {
         let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let temp = std::env::temp_dir().join(format!("hnmod-sdk-test-{}-{nonce}", std::process::id()));
         let _ = std::fs::remove_dir_all(&temp);
-        std::fs::create_dir_all(&temp).unwrap();
+        std::fs::create_dir_all(temp.join("slices")).unwrap();
         let value = index("aarch64-linux-android");
         let bytes = serde_json::to_vec(&value).unwrap();
         std::fs::write(temp.join("sdk.json"), &bytes).unwrap();
@@ -227,6 +266,10 @@ mod tests {
         });
         std::fs::write(temp.join(".install-manifest.json"), serde_json::to_vec(&receipt).unwrap()).unwrap();
         assert!(VerifiedIdentity::read(&temp).is_ok());
+        std::fs::create_dir_all(temp.join("slices/runtime")).unwrap();
+        std::fs::write(temp.join("slices/runtime/marker"), b"tampered").unwrap();
+        assert!(VerifiedIdentity::read(&temp).unwrap_err().contains("extracted files"));
+        std::fs::remove_file(temp.join("slices/runtime/marker")).unwrap();
         let mut bad = receipt;
         bad["signature_verified"] = serde_json::Value::Bool(false);
         std::fs::write(temp.join(".install-manifest.json"), serde_json::to_vec(&bad).unwrap()).unwrap();
