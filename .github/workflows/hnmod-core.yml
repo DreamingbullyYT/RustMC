@@ -285,6 +285,22 @@ jobs:
               assert (profile / "options.txt").read_text() == "renderDistance=8"
               assert (profile / "horizon-mods.txt").read_text() == "mod.demo:true\n"
               assert (profile / ".hpack-install.json").is_file()
+              # A later pack revision removes old pack-owned mods and unchanged overrides transactionally.
+              plan2 = dict(plan, profile_version="1.1.0", overrides=[], mods=[], content_fingerprint_sha256="b" * 64)
+              cli.write_text(
+                  "#!/usr/bin/env python3\nimport json,sys\n"
+                  "if sys.argv[1] == 'resolve-hpack': print(" + repr(json.dumps(plan2)) + ")\n"
+                  "else: raise SystemExit(9)\n"
+              )
+              pack2 = root / "cozy-update.hpack"
+              with zipfile.ZipFile(pack2, "w") as archive:
+                  archive.writestr("horizon-modpack.toml", "format=1")
+              args.pack = pack2
+              result2 = installer["install"](args)
+              assert result2["mods_installed"] == 0
+              assert not (profile / "horizon-mods/demo.hmod").exists()
+              assert not (profile / "options.txt").exists()
+              assert (profile / "horizon-mods.txt").read_text() == ""
           PY
       - name: Verify pinned mixins build uses a local checkout
         run: |
