@@ -41,6 +41,30 @@ fn dependency_tables(cargo: &toml::Table) -> Vec<(Option<&str>, &toml::Table)> {
     tables
 }
 
+
+fn all_dependency_tables(cargo: &toml::Table) -> Vec<(String, &toml::Table)> {
+    const SECTIONS: [&str; 5] = [
+        "dependencies", "dev-dependencies", "build-dependencies",
+        "dev_dependencies", "build_dependencies",
+    ];
+    let mut tables = Vec::new();
+    for section in SECTIONS {
+        if let Some(table) = cargo.get(section).and_then(toml::Value::as_table) {
+            tables.push((section.to_owned(), table));
+        }
+    }
+    if let Some(targets) = cargo.get("target").and_then(toml::Value::as_table) {
+        for (target, config) in targets {
+            for section in SECTIONS {
+                if let Some(table) = config.get(section).and_then(toml::Value::as_table) {
+                    tables.push((format!("target.{target}.{section}"), table));
+                }
+            }
+        }
+    }
+    tables
+}
+
 /// Mirror the upstream prebuilt compiler's refusal rules before any Cargo process can run.
 fn validate_native_crate(bundle: &Hmod) -> Result<(), Error> {
     let id = &bundle.manifest.id;
@@ -74,8 +98,7 @@ fn validate_native_crate(bundle: &Hmod) -> Result<(), Error> {
         return Err(compatibility(format!("{id}: E_NATIVE_FEATURES: Cargo features are not supported by the pinned SDK route")));
     }
 
-    let mut has_api = false;
-    for (target, dependencies) in dependency_tables(&cargo) {
+    for (section, dependencies) in all_dependency_tables(&cargo) {
         for (key, value) in dependencies {
             let package_name = value.get("package").and_then(toml::Value::as_str).unwrap_or(key);
             if package_name == "horizon-client" {
@@ -84,25 +107,28 @@ fn validate_native_crate(bundle: &Hmod) -> Result<(), Error> {
             let is_api = API_PACKAGES.contains(&package_name);
             for selector in ["git", "registry", "registry-index", "branch", "rev", "tag", "workspace"] {
                 if value.get(selector).is_some() {
-                    return Err(compatibility(format!("{id}: E_SDK_SOURCE: {key} uses forbidden {selector} source selector")));
+                    return Err(compatibility(format!("{id}: E_SDK_SOURCE: {section}.{key} uses forbidden {selector} source selector")));
                 }
             }
             if is_api {
                 let expected = format!(".horizon/sdk/api/crates/{package_name}");
                 if value.get("path").and_then(toml::Value::as_str) != Some(expected.as_str()) {
-                    return Err(compatibility(format!("{id}: E_SDK_SOURCE: {key} must use pinned SDK path {expected}")));
+                    return Err(compatibility(format!("{id}: E_SDK_SOURCE: {section}.{key} must use pinned SDK path {expected}")));
                 }
                 let features = value.get("features").and_then(toml::Value::as_array).is_some_and(|v| !v.is_empty());
                 let no_defaults = value.get("default-features").and_then(toml::Value::as_bool) == Some(false);
                 if features || no_defaults {
-                    return Err(compatibility(format!("{id}: E_NATIVE_FEATURES: {key} changes the pinned SDK feature set")));
-                }
-                if target.is_none() && package_name == "horizon-mod-api" {
-                    has_api = true;
+                    return Err(compatibility(format!("{id}: E_NATIVE_FEATURES: {section}.{key} changes the pinned SDK feature set")));
                 }
             }
         }
     }
+
+    let has_api = dependency_tables(&cargo).iter().any(|(target, dependencies)| {
+        target.is_none() && dependencies.iter().any(|(key, value)| {
+            value.get("package").and_then(toml::Value::as_str).unwrap_or(key) == "horizon-mod-api"
+        })
+    });
     if !has_api {
         return Err(compatibility(format!("{id}: E_NATIVE_API_DEPENDENCY: Cargo.toml must depend on horizon-mod-api in [dependencies]")));
     }
