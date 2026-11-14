@@ -182,7 +182,7 @@ impl VerifiedIdentity {
             return Err("SDK game and mixins revisions must be full lowercase commit IDs".into());
         }
         if index.build.game.trim().is_empty() || index.toolchain.rust.trim().is_empty()
-            || index.content_api.trim().is_empty() || index.surface.hash.trim().is_empty()
+            || index.content_api.trim().is_empty() || !hex(&index.surface.hash, 64)
             || index.package_format == 0 {
             return Err("SDK game version and Rust toolchain identity are required".into());
         }
@@ -266,7 +266,7 @@ mod tests {
             "package_format":1,
             "toolchain":{"rust":"1.95.0"},
             "content_api":"0.2",
-            "surface":{"hash":"x"},
+            "surface":{"hash":"e".repeat(64)},
             "mixins":{"rev":"b".repeat(40),"patch":"c".repeat(64)},
             "assets":assets,
             "inputs":{}
