@@ -490,7 +490,7 @@ private fun BuildPage(
                 "Install a .hpack from the official registry into an isolated profile. Profile activation is not available yet.",
                 color = MutedInk, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, bottom = 10.dp)
             )
-            ActionPill("Install .hpack modpack", Icons.Default.Inventory2, onInstallHpack, Modifier.fillMaxWidth())
+            ActionPill("Install .hpack modpack", Icons.Default.Extension, onInstallHpack, Modifier.fillMaxWidth())
         }
         Spacer(Modifier.height(12.dp))
         GlassCard {
