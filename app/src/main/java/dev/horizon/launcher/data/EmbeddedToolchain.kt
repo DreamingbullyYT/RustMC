@@ -94,7 +94,7 @@ object EmbeddedToolchain {
     suspend fun installHpack(
         activity: Activity,
         pack: Uri,
-        registryIndex: Uri,
+        registryIndex: Uri? = null,
         allowUnsigned: Boolean = false,
         onProgress: (String) -> Unit = {},
         onLogLine: (String) -> Unit = {}
