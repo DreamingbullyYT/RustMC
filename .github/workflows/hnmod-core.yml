@@ -267,7 +267,7 @@ jobs:
               cli.write_text(
                   "#!/usr/bin/env python3\nimport json,sys\n"
                   "if sys.argv[1] == 'resolve-hpack': print(" + repr(json.dumps(plan)) + ")\n"
-                  "else: print(json.dumps({'format':'hmod','id':'demo','version':'1.0.0','api':'0.2','side':'client','capabilities':[],'kind':'content','game':None}))\\n"
+                  "else: print(json.dumps({'format':'hmod','id':'demo','version':'1.0.0','api':'0.2','side':'client','capabilities':[],'kind':'content','game':None}))\n"
               )
               cli.chmod(0o755)
               class Response(io.BytesIO):
