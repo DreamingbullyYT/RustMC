@@ -136,7 +136,7 @@ object EmbeddedToolchain {
                 "DEBIAN_FRONTEND=noninteractive apt install -y --fix-missing " +
                     "-o Acquire::Retries=5 -o Acquire::Queue-Mode=access " +
                     "-o Dpkg::Options::=--force-confnew " +
-                    "rust clang git rsync binutils python cmake make pkg-config coreutils openssl",
+                    "rust clang git rsync binutils python cmake make pkg-config coreutils openssl minisign",
                 "termux-install-build-packages", onLine = onLogLine
             )
             check(packages.exitCode == 0) {
