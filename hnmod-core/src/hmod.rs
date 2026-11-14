@@ -227,8 +227,8 @@ mod tests {
 
     #[test] fn accepts_nov12_manifest_metadata_and_state_rows() {
         let t = native_toml("")
-            + "description = \"A current native mod\"\\nauthors = [\"Author\"]\\nlicense = \"MIT\"\\nside = \"client\"\\nnamespaces = [\"demo\"]\\n"
-            + "[[native.state]]\\nid = \"state\"\\ntype = \"u32\"\\n";
+            + "description = \"A current native mod\"\nauthors = [\"Author\"]\nlicense = \"MIT\"\nside = \"client\"\nnamespaces = [\"demo\"]\n"
+            + "[[native.state]]\nid = \"state\"\ntype = \"u32\"\n";
         let m = HmodManifest::parse(&t).unwrap();
         assert_eq!(m.side, "client");
         assert_eq!(m.native.unwrap().state[0].id, "state");
