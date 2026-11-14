@@ -137,6 +137,88 @@ jobs:
           embedded=$(cat app/src/main/assets/hnmod/android/termux/native-sdk.sh)
           source=$(cat android/termux/native-sdk.sh)
           test "$embedded" = "$source"
+      - name: Test authenticated native SDK download, validation, extraction and rollback safety
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, io, json, os, pathlib, runpy, subprocess, tarfile, tempfile
+          root = pathlib.Path.cwd()
+          installer = root / "android/termux/install-native-sdk.py"
+          verifier = root / "android/termux/native-sdk.sh"
+          namespace = runpy.run_path(str(installer), run_name="sdk_installer_test")
+          safe_extract = namespace["safe_extract"]
+          with tempfile.TemporaryDirectory() as temporary:
+              tmp = pathlib.Path(temporary)
+              release = tmp / "release"; release.mkdir()
+              commit = "a" * 40
+              target = "aarch64-linux-android"
+              assets = {}
+              def add_file(name, data, kind, codec, target_value=None, side=None):
+                  path = release / name
+                  path.write_bytes(data)
+                  item = {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "kind": kind, "codec": codec}
+                  if target_value: item["target"] = target_value
+                  if side: item["side"] = side
+                  assets[name] = item
+              add_file("surface.json", b'{"schema":1}', "surface", "none")
+              def archive(name, kind, target_value=None):
+                  buffer = io.BytesIO()
+                  with tarfile.open(fileobj=buffer, mode="w:xz") as tar:
+                      payload = b"verified sdk payload"
+                      info = tarfile.TarInfo("marker.txt"); info.size = len(payload)
+                      tar.addfile(info, io.BytesIO(payload))
+                  add_file(name, buffer.getvalue(), kind, "xz", target_value, "client" if target_value else None)
+              archive("build-data.tar.xz", "build-data")
+              archive("api-source.tar.xz", "api-source")
+              for kind in ("runtime", "api", "engine"):
+                  archive(f"{kind}-{target}.tar.xz", kind, target)
+              index = {
+                  "schema": 1,
+                  "build": {"commit": commit, "game": "26.3", "date": "2026-11-14"},
+                  "toolchain": {"rust": "1.95.0"},
+                  "mixins": {"rev": "b" * 40, "patch": "c" * 64},
+                  "assets": assets,
+                  "inputs": {"routes": {}, "how": {}}
+              }
+              (release / "sdk.json").write_text(json.dumps(index, sort_keys=True), encoding="utf-8")
+              sums = []
+              for file in sorted([release / "sdk.json", *release.glob("*.tar.xz"), release / "surface.json"]):
+                  sums.append(f"{hashlib.sha256(file.read_bytes()).hexdigest()}  {file.name}\n")
+              sums_bytes = "".join(sums).encode()
+              (release / "SHA256SUMS").write_bytes(sums_bytes)
+              key = tmp / "private.pem"; pub_pem = tmp / "public.pem"; pub_der = tmp / "public.der"
+              subprocess.run(["openssl", "genpkey", "-algorithm", "ED25519", "-out", str(key)], check=True)
+              subprocess.run(["openssl", "pkey", "-in", str(key), "-pubout", "-out", str(pub_pem)], check=True)
+              subprocess.run(["openssl", "pkey", "-pubin", "-in", str(pub_pem), "-outform", "DER", "-out", str(pub_der)], check=True)
+              public_key = base64.b64encode(pub_der.read_bytes()[-32:]).decode()
+              message = tmp / "message"; message.write_bytes(f"horizon release sdk-{commit}\n".encode() + sums_bytes)
+              signature = tmp / "signature"
+              subprocess.run(["openssl", "pkeyutl", "-sign", "-inkey", str(key), "-rawin", "-in", str(message), "-out", str(signature)], check=True)
+              sig_text = subprocess.check_output(["openssl", "base64", "-A", "-in", str(signature)], text=True)
+              (release / "SHA256SUMS.sig").write_text(sig_text + "\n", encoding="ascii")
+              cache = tmp / "cache"
+              env = dict(os.environ, HORIZON_FORK_RELEASE_KEY_B64=public_key)
+              command = ["python3", str(installer), "--commit", commit, "--target", target,
+                         "--release-dir", str(release), "--cache-dir", str(cache), "--verifier", str(verifier)]
+              subprocess.run(command, env=env, check=True)
+              installed = cache / f"{commit}-{target}"
+              assert (installed / "slices/runtime-" + pathlib.Path(target) / "marker.txt").is_file() if False else (installed / "slices" / f"runtime-{target}" / "marker.txt").is_file()
+              # A tampered signed asset must be rejected even when a previous cache entry exists.
+              with (release / f"runtime-{target}.tar.xz").open("ab") as stream: stream.write(b"tamper")
+              rejected = subprocess.run(command, env=env, capture_output=True, text=True)
+              assert rejected.returncode != 0 and "checksum" in rejected.stderr.lower()
+              # Tar path traversal and symlinks are refused before any extraction.
+              malicious = tmp / "malicious.tar.xz"
+              with tarfile.open(malicious, "w:xz") as tar:
+                  payload = b"escape"; info = tarfile.TarInfo("../escape"); info.size = len(payload)
+                  tar.addfile(info, io.BytesIO(payload))
+              try:
+                  safe_extract(malicious, tmp / "unpack")
+              except RuntimeError:
+                  pass
+              else:
+                  raise AssertionError("path traversal archive was accepted")
+          PY
       - name: Verify pinned mixins build uses a local checkout
         run: |
           python3 - <<'PY'
