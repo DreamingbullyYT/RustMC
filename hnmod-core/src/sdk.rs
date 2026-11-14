@@ -235,6 +235,7 @@ mod tests {
         std::fs::remove_dir_all(temp).unwrap();
     }
 
+    #[test]
     fn reads_sdk_index_and_checks_android_slices_and_pins() {
         let value = index("aarch64-linux-android");
         let parsed: SdkIndex = serde_json::from_value(value).unwrap();
