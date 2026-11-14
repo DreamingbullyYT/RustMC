@@ -116,20 +116,20 @@ jobs:
           temp=$(mktemp -d)
           trap 'rm -rf "$temp"' EXIT
           sdk="$temp/sdk"; mkdir -p "$sdk"
-          printf '%s\\n' '{"schema":1}' > "$sdk/sdk.json"
-          printf 'runtime slice\\n' > "$sdk/runtime-aarch64-linux-android.tar.xz"
-          printf 'api slice\\n' > "$sdk/api-aarch64-linux-android.tar.xz"
-          printf 'engine slice\\n' > "$sdk/engine-aarch64-linux-android.tar.xz"
+          printf '%s\n' '{"schema":1}' > "$sdk/sdk.json"
+          printf 'runtime slice\n' > "$sdk/runtime-aarch64-linux-android.tar.xz"
+          printf 'api slice\n' > "$sdk/api-aarch64-linux-android.tar.xz"
+          printf 'engine slice\n' > "$sdk/engine-aarch64-linux-android.tar.xz"
           (cd "$sdk" && sha256sum sdk.json runtime-aarch64-linux-android.tar.xz api-aarch64-linux-android.tar.xz engine-aarch64-linux-android.tar.xz > SHA256SUMS)
           openssl genpkey -algorithm ED25519 -out "$temp/private.pem"
           openssl pkey -in "$temp/private.pem" -pubout -out "$temp/public.pem"
-          pub=$(openssl pkey -pubin -in "$temp/public.pem" -outform DER | tail -c 32 | base64 | tr -d '\\n')
+          pub=$(openssl pkey -pubin -in "$temp/public.pem" -outform DER | tail -c 32 | base64 | tr -d '\n')
           commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          { printf 'horizon release sdk-%s\\n' "$commit"; cat "$sdk/SHA256SUMS"; } > "$temp/message"
+          { printf 'horizon release sdk-%s\n' "$commit"; cat "$sdk/SHA256SUMS"; } > "$temp/message"
           openssl pkeyutl -sign -inkey "$temp/private.pem" -rawin -in "$temp/message" -out "$temp/signature"
           base64 < "$temp/signature" > "$sdk/SHA256SUMS.sig"
           HORIZON_FORK_RELEASE_KEY_B64="$pub" bash -c 'source "$1"; horizon_sdk_verify_release "$2" "$3"' _ android/termux/native-sdk.sh "$sdk" "$commit"
-          printf 'tampered\\n' >> "$sdk/runtime-aarch64-linux-android.tar.xz"
+          printf 'tampered\n' >> "$sdk/runtime-aarch64-linux-android.tar.xz"
           if HORIZON_FORK_RELEASE_KEY_B64="$pub" bash -c 'source "$1"; horizon_sdk_verify_release "$2" "$3"' _ android/termux/native-sdk.sh "$sdk" "$commit"; then
             echo "tampered SDK asset was incorrectly accepted" >&2
             exit 1
