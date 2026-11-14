@@ -308,6 +308,15 @@ jobs:
               receipt_path = profile / ".hpack-install.json"
               receipt = json.loads(receipt_path.read_text())
               receipt["overrides"]["unowned.txt"] = hashlib.sha256(b"keep me").hexdigest()
+              receipt["id"] = "another_profile"
+              receipt_path.write_text(json.dumps(receipt))
+              try:
+                  installer["install"](args)
+              except RuntimeError as error:
+                  assert "does not own this profile" in str(error)
+              else:
+                  raise AssertionError("a receipt for another profile was accepted")
+              receipt["id"] = "cozy"
               receipt_path.write_text(json.dumps(receipt))
               # A user-modified pack-owned mod is preserved rather than silently deleted.
               mod_file = profile / "horizon-mods/demo.hmod"
