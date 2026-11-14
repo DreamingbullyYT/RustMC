@@ -9,6 +9,11 @@ on:
       - "android/android.patch"
       - "android/overlay/**"
       - "app/src/main/assets/hnmod/android/**"
+      - "app/src/main/assets/hnmod/hnmod-core/**"
+      - "android/termux/native-sdk.sh"
+      - "android/termux/install-native-sdk.py"
+      - "app/src/main/assets/hnmod/android/termux/native-sdk.sh"
+      - "app/src/main/assets/hnmod/android/termux/install-native-sdk.py"
       - "app/src/main/java/dev/horizon/launcher/data/**"
       - "app/src/main/java/dev/horizon/launcher/MainActivity.kt"
       - "app/src/main/java/dev/horizon/launcher/ui/**"
@@ -19,6 +24,7 @@ on:
       - "android/android.patch"
       - "android/overlay/**"
       - "app/src/main/assets/hnmod/android/**"
+      - "app/src/main/assets/hnmod/hnmod-core/**"
       - "app/src/main/java/dev/horizon/launcher/data/**"
       - "app/src/main/java/dev/horizon/launcher/MainActivity.kt"
       - ".github/workflows/hnmod-core.yml"
@@ -33,9 +39,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
       - name: Run unit tests and compile CLI
         run: cargo test --locked --manifest-path hnmod-core/Cargo.toml --all-targets
+      - name: Check compiler core for Android ARM64
+        run: cargo check --locked --manifest-path hnmod-core/Cargo.toml --target aarch64-linux-android
+      - name: Verify embedded Rust compiler sources
+        run: |
+          for file in lib.rs bin/hnmod.rs hmod.rs hpack.rs modpack.rs native_plan.rs sdk.rs; do
+            cmp -s "hnmod-core/src/$file" "app/src/main/assets/hnmod/hnmod-core/src/$file"
+          done
       - name: Check Termux compiler shell syntax
         run: bash -n android/termux/build-with-mods.sh
       - name: Verify Git fetch self-repair for pinned revisions
@@ -96,6 +111,233 @@ jobs:
           assert 'cargo install --locked --path' not in script
           embedded = Path("app/src/main/assets/hnmod/android/termux/build-with-mods.sh").read_text()
           assert embedded == script, "embedded compiler script must match its source"
+          PY
+      - name: Test signed Android SDK verification
+        shell: bash
+        run: |
+          bash -n android/termux/native-sdk.sh
+          set -euo pipefail
+          temp=$(mktemp -d)
+          trap 'rm -rf "$temp"' EXIT
+          sdk="$temp/sdk"; mkdir -p "$sdk"
+          printf '%s\n' '{"schema":1}' > "$sdk/sdk.json"
+          printf 'runtime slice\n' > "$sdk/runtime-aarch64-linux-android.tar.xz"
+          printf 'api slice\n' > "$sdk/api-aarch64-linux-android.tar.xz"
+          printf 'engine slice\n' > "$sdk/engine-aarch64-linux-android.tar.xz"
+          (cd "$sdk" && sha256sum sdk.json runtime-aarch64-linux-android.tar.xz api-aarch64-linux-android.tar.xz engine-aarch64-linux-android.tar.xz > SHA256SUMS)
+          openssl genpkey -algorithm ED25519 -out "$temp/private.pem"
+          openssl pkey -in "$temp/private.pem" -pubout -out "$temp/public.pem"
+          pub=$(openssl pkey -pubin -in "$temp/public.pem" -outform DER | tail -c 32 | base64 | tr -d '\n')
+          commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          { printf 'horizon release sdk-%s\n' "$commit"; cat "$sdk/SHA256SUMS"; } > "$temp/message"
+          openssl pkeyutl -sign -inkey "$temp/private.pem" -rawin -in "$temp/message" -out "$temp/signature"
+          base64 < "$temp/signature" | tr -d '\n' > "$sdk/SHA256SUMS.sig"
+          HORIZON_FORK_RELEASE_KEY_B64="$pub" bash -c 'source "$1"; horizon_sdk_verify_release "$2" "$3"' _ android/termux/native-sdk.sh "$sdk" "$commit"
+          printf 'tampered\n' >> "$sdk/runtime-aarch64-linux-android.tar.xz"
+          if HORIZON_FORK_RELEASE_KEY_B64="$pub" bash -c 'source "$1"; horizon_sdk_verify_release "$2" "$3"' _ android/termux/native-sdk.sh "$sdk" "$commit"; then
+            echo "tampered SDK asset was incorrectly accepted" >&2
+            exit 1
+          fi
+          embedded=$(cat app/src/main/assets/hnmod/android/termux/native-sdk.sh)
+          source=$(cat android/termux/native-sdk.sh)
+          test "$embedded" = "$source"
+          python3 -m py_compile android/termux/install-native-sdk.py
+          cmp android/termux/install-native-sdk.py app/src/main/assets/hnmod/android/termux/install-native-sdk.py
+          cmp android/termux/native-sdk.sh app/src/main/assets/hnmod/android/termux/native-sdk.sh
+      - name: Test authenticated native SDK download, validation, extraction and rollback safety
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, io, json, os, pathlib, runpy, subprocess, tarfile, tempfile
+          root = pathlib.Path.cwd()
+          installer = root / "android/termux/install-native-sdk.py"
+          verifier = root / "android/termux/native-sdk.sh"
+          namespace = runpy.run_path(str(installer), run_name="sdk_installer_test")
+          safe_extract = namespace["safe_extract"]
+          with tempfile.TemporaryDirectory() as temporary:
+              tmp = pathlib.Path(temporary)
+              release = tmp / "release"; release.mkdir()
+              commit = "a" * 40
+              target = "aarch64-linux-android"
+              assets = {}
+              def add_file(name, data, kind, codec, target_value=None, side=None):
+                  path = release / name
+                  path.write_bytes(data)
+                  item = {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "kind": kind, "codec": codec}
+                  if target_value: item["target"] = target_value
+                  if side: item["side"] = side
+                  assets[name] = item
+              add_file("surface.json", b'{"schema":1}', "surface", "none")
+              def archive(name, kind, target_value=None):
+                  buffer = io.BytesIO()
+                  with tarfile.open(fileobj=buffer, mode="w:xz") as tar:
+                      root_info = tarfile.TarInfo("."); root_info.type = tarfile.DIRTYPE
+                      tar.addfile(root_info)
+                      payload = b"verified sdk payload"
+                      info = tarfile.TarInfo("marker.txt"); info.size = len(payload)
+                      tar.addfile(info, io.BytesIO(payload))
+                  add_file(name, buffer.getvalue(), kind, "xz", target_value, "client" if target_value else None)
+              archive("build-data.tar.xz", "build-data")
+              archive("api-source.tar.xz", "api-source")
+              for kind in ("runtime", "api", "engine"):
+                  archive(f"{kind}-{target}.tar.xz", kind, target)
+              index = {
+                  "schema": 1,
+                  "build": {"commit": commit, "game": "26.3", "date": "2026-11-14"},
+                  "package_format": 1,
+                  "toolchain": {"rust": "1.95.0"},
+                  "content_api": "0.2",
+                  "surface": {"hash": "e" * 64, "previous": None, "changes": []},
+                  "mixins": {"rev": "b" * 40, "patch": "c" * 64},
+                  "assets": assets,
+                  "inputs": {"routes": {}, "how": {}}
+              }
+              (release / "sdk.json").write_text(json.dumps(index, sort_keys=True), encoding="utf-8")
+              sums = []
+              for file in sorted([release / "sdk.json", *release.glob("*.tar.xz"), release / "surface.json"]):
+                  sums.append(f"{hashlib.sha256(file.read_bytes()).hexdigest()}  {file.name}\n")
+              sums_bytes = "".join(sums).encode()
+              (release / "SHA256SUMS").write_bytes(sums_bytes)
+              key = tmp / "private.pem"; pub_pem = tmp / "public.pem"; pub_der = tmp / "public.der"
+              subprocess.run(["openssl", "genpkey", "-algorithm", "ED25519", "-out", str(key)], check=True)
+              subprocess.run(["openssl", "pkey", "-in", str(key), "-pubout", "-out", str(pub_pem)], check=True)
+              subprocess.run(["openssl", "pkey", "-pubin", "-in", str(pub_pem), "-outform", "DER", "-out", str(pub_der)], check=True)
+              public_key = base64.b64encode(pub_der.read_bytes()[-32:]).decode()
+              message = tmp / "message"; message.write_bytes(f"horizon release sdk-{commit}\n".encode() + sums_bytes)
+              signature = tmp / "signature"
+              subprocess.run(["openssl", "pkeyutl", "-sign", "-inkey", str(key), "-rawin", "-in", str(message), "-out", str(signature)], check=True)
+              sig_text = subprocess.check_output(["openssl", "base64", "-A", "-in", str(signature)], text=True)
+              (release / "SHA256SUMS.sig").write_text(sig_text + "\n", encoding="ascii")
+              cache = tmp / "cache"
+              env = dict(os.environ, HORIZON_FORK_RELEASE_KEY_B64=public_key)
+              command = ["python3", str(installer), "--commit", commit, "--target", target,
+                         "--release-dir", str(release), "--cache-dir", str(cache), "--verifier", str(verifier)]
+              subprocess.run(command, env=env, check=True)
+              installed = cache / f"{commit}-{target}"
+              assert (installed / "slices" / f"runtime-{target}" / "marker.txt").is_file()
+              # A tampered signed asset must be rejected even when a previous cache entry exists.
+              with (release / f"runtime-{target}.tar.xz").open("ab") as stream: stream.write(b"tamper")
+              rejected = subprocess.run(command, env=env, capture_output=True, text=True)
+              assert rejected.returncode != 0 and "checksum" in rejected.stderr.lower()
+              # Tar path traversal and symlinks are refused before any extraction.
+              malicious = tmp / "malicious.tar.xz"
+              with tarfile.open(malicious, "w:xz") as tar:
+                  payload = b"escape"; info = tarfile.TarInfo("../escape"); info.size = len(payload)
+                  tar.addfile(info, io.BytesIO(payload))
+              try:
+                  safe_extract(malicious, tmp / "unpack")
+              except RuntimeError:
+                  pass
+              else:
+                  raise AssertionError("path traversal archive was accepted")
+          PY
+      - name: Test transactional Hpack installation
+        shell: bash
+        run: |
+          bash -n android/termux/install-hpack.sh
+          python3 -m py_compile android/termux/install-hpack.py
+          cmp android/termux/install-hpack.py app/src/main/assets/hnmod/android/termux/install-hpack.py
+          cmp android/termux/install-hpack.sh app/src/main/assets/hnmod/android/termux/install-hpack.sh
+          python3 - <<'PY'
+          import hashlib, io, json, pathlib, runpy, tempfile, types, urllib.request, zipfile
+          installer = runpy.run_path("android/termux/install-hpack.py", run_name="hpack_installer_test")
+          assert not installer["allowed_override"]("../escape")
+          assert not installer["allowed_override"]("unowned.txt")
+          with tempfile.TemporaryDirectory() as security_tmp:
+              security_root = pathlib.Path(security_tmp) / "profile"
+              outside = pathlib.Path(security_tmp) / "outside"
+              security_root.mkdir(); outside.mkdir()
+              (security_root / "linked").symlink_to(outside, target_is_directory=True)
+              try:
+                  installer["safe_target"](security_root, "linked/escape.txt", create_parents=True)
+              except RuntimeError:
+                  pass
+              else:
+                  raise AssertionError("symlink ancestor was accepted in a profile path")
+          payload = b"validated hmod archive bytes"
+          digest = hashlib.sha256(payload).hexdigest()
+          plan = {
+              "profile_id": "cozy", "profile_name": "Cozy", "profile_version": "1.0.0",
+              "game": "26.3", "content_fingerprint_sha256": "a" * 64,
+              "overrides": ["options.txt"], "override_bytes": 12,
+              "mods": [{
+                  "id": "demo", "kind": "mod", "version": "1.0.0",
+                  "api": "0.2", "side": "client", "capabilities": [],
+                  "file_name": "demo-1.0.0.hmod",
+                  "url": "https://github.com/horizon-rust/horizon-mods/releases/download/demo-1.0.0/demo-1.0.0.hmod",
+                  "size": len(payload), "sha256": digest,
+                  "public_key": None, "signature": None, "on": True
+              }]
+          }
+          with tempfile.TemporaryDirectory() as temporary:
+              root = pathlib.Path(temporary)
+              pack = root / "cozy.hpack"
+              with zipfile.ZipFile(pack, "w") as archive:
+                  archive.writestr("horizon-modpack.toml", "format=1")
+                  archive.writestr("overrides/options.txt", "renderDistance=8")
+              index = root / "index.json"; index.write_text("{}")
+              cli = root / "hnmod"
+              cli.write_text(
+                  "#!/usr/bin/env python3\nimport json,sys\n"
+                  "if sys.argv[1] == 'resolve-hpack': print(" + repr(json.dumps(plan)) + ")\n"
+                  "else: print(json.dumps({'format':'hmod','id':'demo','version':'1.0.0','api':'0.2','side':'client','capabilities':[],'kind':'content','game':None}))\n"
+              )
+              cli.chmod(0o755)
+              class Response(io.BytesIO):
+                  def geturl(self): return "https://release-assets.githubusercontent.com/download"
+              old_open = urllib.request.urlopen
+              urllib.request.urlopen = lambda *args, **kwargs: Response(payload)
+              try:
+                  args = types.SimpleNamespace(
+                      pack=pack, index=index, profiles_root=root / "profiles",
+                      hnmod_cli=str(cli), minisign="minisign", allow_unsigned=True
+                  )
+                  result = installer["install"](args)
+              finally:
+                  urllib.request.urlopen = old_open
+              profile = root / "profiles" / "cozy"
+              assert result["mods_installed"] == 1
+              assert result["unsigned_mods"] == ["demo"]
+              assert (profile / "horizon-mods/demo.hmod").read_bytes() == payload
+              assert (profile / "options.txt").read_text() == "renderDistance=8"
+              assert (profile / "horizon-mods.txt").read_text() == "mod.demo:true\n"
+              assert (profile / ".hpack-install.json").is_file()
+              # A forged/stale receipt cannot claim ownership of arbitrary profile files.
+              unowned = profile / "unowned.txt"
+              unowned.write_text("keep me")
+              receipt_path = profile / ".hpack-install.json"
+              receipt = json.loads(receipt_path.read_text())
+              receipt["overrides"]["unowned.txt"] = hashlib.sha256(b"keep me").hexdigest()
+              receipt["id"] = "another_profile"
+              receipt_path.write_text(json.dumps(receipt))
+              try:
+                  installer["install"](args)
+              except RuntimeError as error:
+                  assert "does not own this profile" in str(error)
+              else:
+                  raise AssertionError("a receipt for another profile was accepted")
+              receipt["id"] = "cozy"
+              receipt_path.write_text(json.dumps(receipt))
+              # A user-modified pack-owned mod is preserved rather than silently deleted.
+              mod_file = profile / "horizon-mods/demo.hmod"
+              mod_file.write_bytes(b"user changed this mod")
+              # A later pack revision removes only unchanged pack-owned files transactionally.
+              plan2 = dict(plan, profile_version="1.1.0", overrides=[], mods=[], content_fingerprint_sha256="b" * 64)
+              cli.write_text(
+                  "#!/usr/bin/env python3\nimport json,sys\n"
+                  "if sys.argv[1] == 'resolve-hpack': print(" + repr(json.dumps(plan2)) + ")\n"
+                  "else: raise SystemExit(9)\n"
+              )
+              pack2 = root / "cozy-update.hpack"
+              with zipfile.ZipFile(pack2, "w") as archive:
+                  archive.writestr("horizon-modpack.toml", "format=1")
+              args.pack = pack2
+              result2 = installer["install"](args)
+              assert result2["mods_installed"] == 0
+              assert mod_file.read_bytes() == b"user changed this mod"
+              assert not (profile / "options.txt").exists()
+              assert unowned.read_text() == "keep me"
+              assert (profile / "horizon-mods.txt").read_text() == ""
           PY
       - name: Verify pinned mixins build uses a local checkout
         run: |

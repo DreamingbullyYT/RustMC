@@ -15,6 +15,56 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
+        Some("resolve-hmods") => {
+            let target = args.next().ok_or("usage: hnmod resolve-hmods TARGET PROFILE SDK_DIR MOD.hmod...")?;
+            let profile = args.next().ok_or("missing profile")?;
+            let sdk_path = args.next().ok_or("missing installed SDK directory")?;
+            let paths: Vec<_> = args.collect();
+            if paths.is_empty() { return Err("give at least one native .hmod archive".into()); }
+            let mut bundles = Vec::with_capacity(paths.len());
+            for path in &paths {
+                bundles.push(horizon_hnmod_core::hmod::read_hmod(std::fs::File::open(path)?)?);
+            }
+            let sdk = horizon_hnmod_core::sdk::VerifiedIdentity::read(Path::new(&sdk_path))?;
+            let plan = horizon_hnmod_core::native_plan::resolve(&bundles, &target, &profile, &sdk)?;
+            println!("{}", serde_json::to_string(&plan)?);
+        }
+        Some("inspect-sdk") => {
+            let path = args.next().ok_or("usage: hnmod inspect-sdk SDK_DIR TARGET")?;
+            let target = args.next().ok_or("missing target triple")?;
+            if args.next().is_some() { return Err("too many arguments".into()); }
+            let sdk = horizon_hnmod_core::sdk::VerifiedIdentity::read(Path::new(&path))?;
+            sdk.require_target(&target, &sdk.index.build.game, &sdk.index.build.commit, &sdk.index.mixins.rev)?;
+            println!("{}", serde_json::to_string(&json!({
+                "game": sdk.index.build.game,
+                "commit": sdk.index.build.commit,
+                "mixins": sdk.index.mixins.rev,
+                "rust": sdk.index.toolchain.rust,
+                "target": target,
+                "index_sha256": sdk.index_sha256,
+                "authenticated": true
+            }))?);
+        }
+        Some("inspect-hpack") => {
+            let archive = args.next().ok_or("usage: hnmod inspect-hpack FILE.hpack")?;
+            if args.next().is_some() { return Err("too many arguments".into()); }
+            let report = horizon_hnmod_core::hpack::inspect(std::fs::File::open(archive)?)?;
+            println!("{}", serde_json::to_string(&report)?);
+        }
+        Some("resolve-hpack") => {
+            let archive = args.next().ok_or("usage: hnmod resolve-hpack FILE.hpack INDEX.json")?;
+            let index_path = args.next().ok_or("missing registry index JSON path")?;
+            if args.next().is_some() { return Err("too many arguments".into()); }
+            let index = fs::read_to_string(index_path)?;
+            let plan = horizon_hnmod_core::hpack::resolve(Path::new(&archive), &index)?;
+            println!("{}", serde_json::to_string(&plan)?);
+        }
+        Some("inspect-pack") => {
+            let archive = args.next().ok_or("usage: hnmod inspect-pack FILE.mrpack")?;
+            if args.next().is_some() { return Err("too many arguments".into()); }
+            let report = horizon_hnmod_core::modpack::inspect(std::fs::File::open(archive)?)?;
+            println!("{}", serde_json::to_string(&report)?);
+        }
         Some("inspect") => {
             let archive = args.next().ok_or("usage: hnmod inspect FILE.hnmod")?;
             if args.next().is_some() { return Err("too many arguments".into()); }
@@ -138,7 +188,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             eprintln!("Usage:");
-            eprintln!("  hnmod inspect FILE.hnmod");
+            eprintln!("  hnmod inspect FILE.hmod|FILE.hnmod");
+            eprintln!("  hnmod resolve-hmods TARGET PROFILE SDK.json MOD.hmod...");
+            eprintln!("  hnmod inspect-sdk SDK.json TARGET");
+            eprintln!("  hnmod inspect-hpack FILE.hpack");
+            eprintln!("  hnmod resolve-hpack FILE.hpack INDEX.json");
+            eprintln!("  hnmod inspect-pack FILE.mrpack");
             eprintln!("  hnmod extract FILE.hnmod NEW_DIRECTORY");
             eprintln!("  hnmod prepare MODS_DIRECTORY PLAN.json");
             eprintln!("  hnmod stage-api MODS_DIRECTORY STAGE_DIRECTORY PLAN.json");

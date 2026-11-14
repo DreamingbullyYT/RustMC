@@ -99,6 +99,9 @@ class MainActivity : ComponentActivity() {
     private val hnmodPicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) confirmAndCompileHnmods(uris)
     }
+    private val hpackPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) confirmAndInstallHpack(uri)
+    }
     private val compiledBuildPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) confirmAndImportBuild(uri)
     }
@@ -171,6 +174,7 @@ class MainActivity : ComponentActivity() {
                 onImportFolder = { folderPicker.launch(null) },
                 onRestoreBackup = { backupPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
                 onCompileHnmod = { hnmodPicker.launch(arrayOf("application/octet-stream", "application/zip", "*/*")) },
+                onInstallHpack = { hpackPicker.launch(arrayOf("application/octet-stream", "application/zip", "*/*")) },
                 onImportBuild = { compiledBuildPicker.launch(arrayOf("application/octet-stream", "*/*")) },
                 onExportBackup = {
                     run("Exporting backup") {
@@ -436,6 +440,35 @@ class MainActivity : ComponentActivity() {
                 }
             }
             .show()
+    }
+
+    private fun confirmAndInstallHpack(uri: Uri) {
+        AlertDialog.Builder(this)
+            .setTitle("Install Horizon modpack?")
+            .setMessage(
+                "Horizon resolves exact mod versions against the official registry, downloads and verifies their hashes, " +
+                    "then installs them into a separate private profile. This does not activate the profile or execute mod code. " +
+                    "Choose signed-only for the safer default. Allow unsigned only when you trust the listed mod authors; " +
+                    "unsigned files have no author minisign signature."
+            )
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Signed packages only") { _, _ -> installHpack(uri, allowUnsigned = false) }
+            .setNeutralButton("Allow unsigned") { _, _ -> installHpack(uri, allowUnsigned = true) }
+            .show()
+    }
+
+    private fun installHpack(uri: Uri, allowUnsigned: Boolean) {
+        run("Installing Horizon modpack") {
+            dev.horizon.launcher.data.EmbeddedToolchain.installHpack(
+                this, uri, allowUnsigned = allowUnsigned,
+                onProgress = { message -> runOnUiThread { show(message) } },
+                onLogLine = { message ->
+                    if (message.startsWith("WARNING:") || message.startsWith("ERROR:") || message.startsWith("Hpack")) {
+                        runOnUiThread { show(message) }
+                    }
+                }
+            )
+        }
     }
 
     private fun confirmAndImportBuild(uri: Uri) {

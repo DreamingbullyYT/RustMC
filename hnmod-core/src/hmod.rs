@@ -27,6 +27,7 @@ pub struct Native {
     #[serde(default)] pub mixin: Vec<Row>,
     #[serde(default, rename = "loop")] pub loops: Vec<Row>,
     #[serde(default)] pub bridge: Vec<Row>,
+    #[serde(default)] pub state: Vec<Row>,
     #[serde(default)] pub module: Vec<Row>,
 }
 
@@ -50,14 +51,24 @@ pub struct Inject {
 #[serde(deny_unknown_fields)]
 pub struct HmodManifest {
     pub id: String,
-    #[serde(default)] pub name: String,
+    pub name: String,
     pub version: String,
+    pub description: String,
+    pub authors: Vec<String>,
+    pub license: String,
+    pub license_url: Option<String>,
+    pub credits: String,
+    pub homepage: Option<String>,
+    pub issues: Option<String>,
     pub api: String,
-    #[serde(default)] pub capabilities: Vec<String>,
+    pub side: String,
+    pub capabilities: Vec<String>,
+    pub namespaces: Vec<String>,
+    pub dependencies: BTreeMap<String, toml::Value>,
+    #[serde(default)] pub jar: Vec<toml::Value>,
     #[serde(default)] pub native: Option<Native>,
     #[serde(default)] pub wasm: Option<Wasm>,
     #[serde(default)] pub inject: Vec<Inject>,
-    #[serde(default)] pub dependencies: BTreeMap<String, toml::Value>,
     #[serde(default)] pub properties: BTreeMap<String, toml::Value>,
     #[serde(default)] pub wasm_memory_mib: Option<u32>,
 }
@@ -90,6 +101,12 @@ impl HmodManifest {
         if !valid_hmod_id(&self.id) { return bad("id must be [a-z0-9_], 1 to 64 characters"); }
         semver::Version::parse(&self.version).map_err(|e| Error::Manifest(format!("version: {e}")))?;
         if self.api.trim().is_empty() { return bad("api must not be empty"); }
+        if self.name.trim().is_empty() || self.description.trim().is_empty() || self.license.trim().is_empty() {
+            return bad("name, description and license are required");
+        }
+        if !matches!(self.side.as_str(), "client" | "server" | "both") {
+            return bad("side must be client, server or both");
+        }
         if self.native.is_some() && self.wasm.is_some() { return bad("a mod is [native] or [wasm], never both"); }
         if let Some(m) = self.wasm_memory_mib && !(1..=4096).contains(&m) {
             return bad("wasm_memory_mib must be 1 to 4096");
@@ -106,7 +123,7 @@ impl HmodManifest {
             if n.game.trim().is_empty() { return bad("[native].game must not be empty"); }
             if !is_revision(&n.horizon) { return bad("[native].horizon must be a 40-character lowercase commit ID"); }
             if !is_revision(&n.mixins) { return bad("[native].mixins must be a 40-character lowercase commit ID"); }
-            for r in n.mixin.iter().chain(&n.loops).chain(&n.bridge).chain(&n.module) { row(&r.id)?; }
+            for r in n.mixin.iter().chain(&n.loops).chain(&n.bridge).chain(&n.state).chain(&n.module) { row(&r.id)?; }
         }
         if let Some(w) = &self.wasm {
             if !is_hex(&w.sha512, 128) { return bad("[wasm].sha512 must be 128 lowercase hex characters"); }
@@ -136,6 +153,24 @@ pub fn read_hmod<R: Read + Seek>(reader: R) -> Result<Hmod, Error> {
             return Err(Error::Manifest("mod.wasm does not match [wasm].sha512".into()));
         }
     }
+    if let Some(native) = &manifest.native {
+        if !files.contains_key("Cargo.toml") || !files.contains_key("src/lib.rs") {
+            return Err(Error::Manifest("a native .hmod needs root Cargo.toml and src/lib.rs".into()));
+        }
+        for row in native.mixin.iter().chain(&native.loops) {
+            if let Some(helper) = row.options.get("helper").and_then(toml::Value::as_str) {
+                let path = std::path::Path::new(helper);
+                if !helper.starts_with("src/") || path.is_absolute()
+                    || !path.components().all(|part| matches!(part, std::path::Component::Normal(_)))
+                    || !files.contains_key(helper)
+                {
+                    return Err(Error::Manifest(format!("{}: helper must be an existing file under src/", row.id)));
+                }
+            } else {
+                return Err(Error::Manifest(format!("{}: missing helper path", row.id)));
+            }
+        }
+    }
     let sha256 = digest(&files);
     Ok(Hmod { manifest, files, sha256 })
 }
@@ -144,8 +179,8 @@ pub fn read_hmod<R: Read + Seek>(reader: R) -> Result<Hmod, Error> {
 #[serde(tag = "format", rename_all = "lowercase")]
 pub enum Inspected {
     /// Current format.
-    Hmod { id: String, version: String, kind: &'static str, game: Option<String>, horizon: Option<String>,
-           mixins: Option<String>, sha256: String },
+    Hmod { id: String, version: String, api: String, side: String, capabilities: Vec<String>,
+           kind: &'static str, game: Option<String>, horizon: Option<String>, mixins: Option<String>, sha256: String },
     /// Older `.hnmod` bundle, still supported.
     Hnmod { id: String, version: String, game: String, horizon: String, mixins: String, sha256: String },
 }
@@ -160,7 +195,8 @@ pub fn inspect<R: Read + Seek>(mut reader: R) -> Result<Inspected, Error> {
         let m = h.manifest;
         let kind = if m.native.is_some() { "native" } else if m.wasm.is_some() { "wasm" } else { "content" };
         Ok(Inspected::Hmod {
-            id: m.id, version: m.version, kind,
+            id: m.id, version: m.version, api: m.api, side: m.side,
+            capabilities: m.capabilities, kind,
             game: m.native.as_ref().map(|n| n.game.clone()),
             horizon: m.native.as_ref().map(|n| n.horizon.clone()),
             mixins: m.native.as_ref().map(|n| n.mixins.clone()),
@@ -185,20 +221,26 @@ mod tests {
         Cursor::new(z.finish().unwrap().into_inner())
     }
     fn native_toml(extra: &str) -> String {
-        format!("id = \"demo\"\nname = \"Demo\"\nversion = \"1.2.3\"\napi = \"0.2\"\n{extra}\n[native]\ngame = \"26.3\"\nhorizon = \"{}\"\nmixins = \"{}\"\n",
+        format!("id = \"demo\"\nname = \"Demo\"\nversion = \"1.2.3\"\ndescription = \"Demo mod\"\nauthors = [\"Test\"]\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {{}}\n{extra}\n[native]\ngame = \"26.3\"\nhorizon = \"{}\"\nmixins = \"{}\"\n",
             "a".repeat(40), "b".repeat(40))
     }
-
     #[test] fn native_mod_with_mixin_rows() {
         let t = native_toml("") + "[[native.mixin]]\nid = \"m1\"\ntarget = \"x::y\"\nkind = \"HEAD\"\n[[native.loop]]\nid = \"l1\"\n";
         let m = HmodManifest::parse(&t).unwrap();
         assert_eq!(m.native.as_ref().unwrap().mixin[0].id, "m1");
         assert_eq!(m.native.unwrap().loops[0].id, "l1");
     }
+
+    #[test] fn accepts_nov12_manifest_metadata_and_state_rows() {
+        let t = native_toml("") + "[[native.state]]\nid = \"state\"\ntype = \"u32\"\n";
+        let m = HmodManifest::parse(&t).unwrap();
+        assert_eq!(m.side, "client");
+        assert_eq!(m.native.unwrap().state[0].id, "state");
+    }
     #[test] fn removed_fields_are_named() {
         let t = native_toml("") + "[[inject]]\nid = \"i\"\nat = \"a\"\nkind = \"head\"\nwith = \"w\"\naccess = \"internals\"\n";
         assert!(HmodManifest::parse(&t).unwrap_err().to_string().contains("access"));
-        let t = "id = \"d\"\nversion = \"1.0.0\"\napi = \"0.2\"\n[[internals]]\npath = \"a\"\n";
+        let t = "id = \"d\"\nname = \"D\"\nversion = \"1.0.0\"\ndescription = \"D\"\nauthors = []\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {}\n[[internals]]\npath = \"a\"\n";
         assert!(HmodManifest::parse(t).unwrap_err().to_string().contains("internals"));
     }
     #[test] fn rejects_bad_input() {
@@ -211,20 +253,56 @@ mod tests {
         assert!(HmodManifest::parse(&dup).unwrap_err().to_string().contains("duplicate"));
     }
     #[test] fn content_mod_without_code() {
-        let m = HmodManifest::parse("id = \"pack\"\nversion = \"0.1.0\"\napi = \"0.2\"\n").unwrap();
+        let manifest = "id = \"pack\"\nname = \"Pack\"\nversion = \"0.1.0\"\ndescription = \"Content pack\"\nauthors = []\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {}\n";
+        let m = HmodManifest::parse(manifest).unwrap();
         assert!(m.native.is_none() && m.wasm.is_none());
     }
     #[test] fn wasm_hash_is_checked() {
         let wasm = b"\0asm\x01\0\0\0";
         let good = format!("{:x}", Sha512::digest(wasm));
-        let t = |h: &str| format!("id = \"w\"\nversion = \"1.0.0\"\napi = \"0.2\"\n[wasm]\nsha512 = \"{h}\"\ntoolchain = \"x\"\n");
+        let t = |h: &str| format!("id = \"w\"\nname = \"Wasm\"\nversion = \"1.0.0\"\ndescription = \"Wasm mod\"\nauthors = []\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {{}}\n[wasm]\nsha512 = \"{h}\"\ntoolchain = \"x\"\n");
         let ok = zip_of(&[(HMOD_MANIFEST, t(&good).as_bytes()), ("mod.wasm", wasm)]);
         assert!(read_hmod(ok).is_ok());
         let bad = zip_of(&[(HMOD_MANIFEST, t(&"0".repeat(128)).as_bytes()), ("mod.wasm", wasm)]);
         assert!(read_hmod(bad).is_err());
     }
+    #[test] fn native_package_requires_crate_and_helper_sources() {
+        let mut manifest = native_toml("");
+        manifest.push_str(
+            r#"
+[[native.mixin]]
+id = "entry"
+target = "horizon_client::game::Game::tick"
+kind = "HEAD"
+helper = "src/mixins/entry.rs"
+"#,
+        );
+        let cargo = br#"[package]
+name = "demo"
+version = "1.0.0"
+edition = "2024"
+"#;
+        let ok = zip_of(&[
+            (HMOD_MANIFEST, manifest.as_bytes()), ("Cargo.toml", cargo),
+            ("src/lib.rs", b"//"), ("src/mixins/entry.rs", b"fn entry() {}"),
+        ]);
+        assert!(read_hmod(ok).is_ok());
+
+        let missing_helper = zip_of(&[
+            (HMOD_MANIFEST, manifest.as_bytes()), ("Cargo.toml", cargo), ("src/lib.rs", b"//"),
+        ]);
+        assert!(read_hmod(missing_helper).unwrap_err().to_string().contains("existing file under src"));
+
+        let missing_crate = zip_of(&[(HMOD_MANIFEST, native_toml("").as_bytes())]);
+        assert!(read_hmod(missing_crate).unwrap_err().to_string().contains("Cargo.toml and src/lib.rs"));
+    }
+
     #[test] fn inspect_picks_format() {
-        let hmod = zip_of(&[(HMOD_MANIFEST, native_toml("").as_bytes()), ("src/lib.rs", b"//")]);
+        let hmod = zip_of(&[
+            (HMOD_MANIFEST, native_toml("").as_bytes()),
+            ("Cargo.toml", b"[package]\nname = \"demo\"\nversion = \"1.0.0\"\nedition = \"2024\"\n"),
+            ("src/lib.rs", b"//"),
+        ]);
         assert!(matches!(inspect(hmod).unwrap(), Inspected::Hmod { kind: "native", .. }));
         let manifest = format!("{{\"id\":\"old_mod\",\"game\":\"26.3\",\"horizon\":\"{}\",\"mixins\":\"{}\"}}", "a".repeat(40), "b".repeat(40));
         let mixin = "[mod]\nid = \"old_mod\"\nversion = \"1.0.0\"\n";

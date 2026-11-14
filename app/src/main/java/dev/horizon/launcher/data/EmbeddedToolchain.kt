@@ -90,6 +90,52 @@ object EmbeddedToolchain {
         }
     }
 
+    /** Imports a registry-pinned .hpack into a separate private profile directory. */
+    suspend fun installHpack(
+        activity: Activity,
+        pack: Uri,
+        registryIndex: Uri? = null,
+        allowUnsigned: Boolean = false,
+        onProgress: (String) -> Unit = {},
+        onLogLine: (String) -> Unit = {}
+    ): String = withContext(Dispatchers.IO) {
+        val initial = status(activity)
+        check(initial.supportedAbi) { initial.detail }
+        HnmodBuildLog.begin(activity)
+        fun logLine(message: String) {
+            HnmodBuildLog.append(activity, message)
+            onLogLine(message)
+        }
+        fun progress(message: String) {
+            HnmodBuildLog.append(activity, message)
+            onProgress(message)
+            onLogLine(message)
+        }
+        HnmodBuildService.begin(activity.applicationContext)
+        try {
+            if (!initial.installed) installRuntime(activity, ::progress, ::logLine)
+            progress("Checking registry signature tools")
+            val securityTools = EmbeddedProcessRunner.runShellCommand(
+                activity,
+                "DEBIAN_FRONTEND=noninteractive apt install -y openssl minisign",
+                "hpack-security-tools", onLine = ::logLine
+            )
+            check(securityTools.exitCode == 0) {
+                "Could not install SDK/modpack signature tools (exit ${securityTools.exitCode}). Log: ${securityTools.logFile.absolutePath}"
+            }
+            progress("Preparing Hpack installer")
+            HnmodBuildAdapter.materializeProject(activity)
+            progress("Downloading and verifying pinned Hpack mods")
+            HpackBuildAdapter.install(activity, pack, registryIndex, allowUnsigned, ::logLine)
+        } catch (error: Exception) {
+            logLine("FATAL: ${error.message ?: error::class.java.simpleName}")
+            throw error
+        } finally {
+            HnmodBuildLog.finish(activity)
+            HnmodBuildService.end(activity.applicationContext)
+        }
+    }
+
     private suspend fun installRuntime(
         context: android.content.Context,
         onProgress: (String) -> Unit,
@@ -136,7 +182,7 @@ object EmbeddedToolchain {
                 "DEBIAN_FRONTEND=noninteractive apt install -y --fix-missing " +
                     "-o Acquire::Retries=5 -o Acquire::Queue-Mode=access " +
                     "-o Dpkg::Options::=--force-confnew " +
-                    "rust clang git rsync binutils python cmake make pkg-config coreutils",
+                    "rust clang git rsync binutils python cmake make pkg-config coreutils openssl minisign",
                 "termux-install-build-packages", onLine = onLogLine
             )
             check(packages.exitCode == 0) {
@@ -146,7 +192,7 @@ object EmbeddedToolchain {
             onProgress("Checking Rust and native compiler")
             val smoke = EmbeddedProcessRunner.runShellCommand(
                 context,
-                "set -e; test \"\$(uname -m)\" = aarch64; cargo --version; rustc --version; clang --version; git --version; rsync --version; python --version; cmake --version; make --version; pkg-config --version; readelf --version",
+                "set -e; test \"\$(uname -m)\" = aarch64; cargo --version; rustc --version; clang --version; git --version; rsync --version; python --version; cmake --version; make --version; pkg-config --version; readelf --version; openssl version",
                 "toolchain-smoke-test", onLine = onLogLine
             )
             check(smoke.exitCode == 0) {

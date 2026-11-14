@@ -3,9 +3,10 @@ name: Android build
 # Builds the Horizon Android APK (Rust JNI core + NativeActivity game runtime + Compose launcher)
 # exactly like ANDROID_BUILD.md describes, then uploads the APK as a workflow artifact.
 #
-#  * every push / pull request  -> debug APK artifact
-#  * manual run (Actions tab)   -> choose debug or release
-#  * tag like v0.2.0            -> GitHub Release with the APK attached
+#  * pull requests / feature-branch pushes -> Kotlin/Compose compile only (no APK)
+#  * main-branch pushes                     -> debug APK artifact
+#  * manual run (Actions tab)               -> choose debug or release
+#  * tag like v0.2.0                        -> GitHub Release with the APK attached
 #
 # Optional repository secrets for a signed release APK (otherwise the release build is skipped
 # and only the debug-signed APK is published):
@@ -43,8 +44,42 @@ env:
   RUST_TARGET: aarch64-linux-android
 
 jobs:
+  kotlin-check:
+    name: Compile Kotlin and Compose (no APK)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-34 build-tools;34.0.0 ndk;26.3.11579264"
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - name: Compile Kotlin/Compose without building native libraries or APK
+        run: gradle :app:compileDebugKotlin --no-daemon --stacktrace
+      - name: Verify Hpack import is connected to the Compile screen
+        run: |
+          grep -q 'onInstallHpack' app/src/main/java/dev/horizon/launcher/MainActivity.kt
+          grep -q 'confirmAndInstallHpack' app/src/main/java/dev/horizon/launcher/MainActivity.kt
+          grep -q 'EmbeddedToolchain.installHpack' app/src/main/java/dev/horizon/launcher/MainActivity.kt
+          grep -q 'onInstallHpack' app/src/main/java/dev/horizon/launcher/ui/HorizonLauncherUi.kt
+          grep -q 'fetchOfficialIndex' app/src/main/java/dev/horizon/launcher/data/HpackBuildAdapter.kt
+          grep -q 'Allow unsigned' app/src/main/java/dev/horizon/launcher/MainActivity.kt
+
   apk:
     name: Build APK
+    # Keep APK builds out of incremental compiler PR work. Build on main, version tags,
+    # or an explicit Actions dispatch after the compiler/installer gates are complete.
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/android-hmod-native-api' || startsWith(github.ref, 'refs/tags/v'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -84,6 +119,9 @@ jobs:
           cmp -s hnmod-core/src/bin/hnmod.rs app/src/main/assets/hnmod/hnmod-core/src/bin/hnmod.rs
           cmp -s hnmod-core/src/dependencies.rs app/src/main/assets/hnmod/hnmod-core/src/dependencies.rs
           cmp -s hnmod-core/src/pc_api.rs app/src/main/assets/hnmod/hnmod-core/src/pc_api.rs
+          cmp -s hnmod-core/src/hmod.rs app/src/main/assets/hnmod/hnmod-core/src/hmod.rs
+          cmp -s hnmod-core/src/hpack.rs app/src/main/assets/hnmod/hnmod-core/src/hpack.rs
+          cmp -s hnmod-core/src/modpack.rs app/src/main/assets/hnmod/hnmod-core/src/modpack.rs
           grep -q 'HnmodBuildAdapter.compile' app/src/main/java/dev/horizon/launcher/data/EmbeddedToolchain.kt
           grep -q 'SYMLINKS.txt' app/src/main/java/dev/horizon/launcher/data/EmbeddedBootstrapInstaller.kt
           grep -q 'TERMUX_IS_TERMUX' app/src/main/java/dev/horizon/launcher/data/EmbeddedProcessRunner.kt
