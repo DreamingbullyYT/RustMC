@@ -417,7 +417,7 @@ def install(args) -> dict:
             target = safe_target(profile, relative)
             if target.is_file() and not target.is_symlink() and sha256(target) == old_hash:
                 stale_override_paths.append(relative)
-        delete_files = sorted(stale_mod_paths | set(stale_override_paths))
+        delete_files = sorted(set(stale_mod_paths) | set(stale_override_paths))
         commit_files(profile, staging, relative_files, delete_files)
         return {
             "profile": str(profile),
