@@ -127,7 +127,7 @@ jobs:
           commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           { printf 'horizon release sdk-%s\n' "$commit"; cat "$sdk/SHA256SUMS"; } > "$temp/message"
           openssl pkeyutl -sign -inkey "$temp/private.pem" -rawin -in "$temp/message" -out "$temp/signature"
-          base64 < "$temp/signature" > "$sdk/SHA256SUMS.sig"
+          base64 < "$temp/signature" | tr -d '\n' > "$sdk/SHA256SUMS.sig"
           HORIZON_FORK_RELEASE_KEY_B64="$pub" bash -c 'source "$1"; horizon_sdk_verify_release "$2" "$3"' _ android/termux/native-sdk.sh "$sdk" "$commit"
           printf 'tampered\n' >> "$sdk/runtime-aarch64-linux-android.tar.xz"
           if HORIZON_FORK_RELEASE_KEY_B64="$pub" bash -c 'source "$1"; horizon_sdk_verify_release "$2" "$3"' _ android/termux/native-sdk.sh "$sdk" "$commit"; then
