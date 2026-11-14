@@ -108,7 +108,7 @@ impl VerifiedIdentity {
             let name = format!("{kind}-{target}.tar.xz");
             let asset = index.assets.get(&name)
                 .ok_or_else(|| format!("SDK has no {target} {kind} slice; this target is not published"))?;
-            if asset.target.as_deref() != Some(target) || asset.codec != "xz" || asset.kind != kind {
+            if asset.target.as_deref() != Some(target) || asset.codec != "xz" || asset.kind != kind || asset.side.as_deref() != Some("client") {
                 return Err(format!("SDK asset {name} has inconsistent target or codec metadata"));
             }
         }
