@@ -51,6 +51,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let report = horizon_hnmod_core::hpack::inspect(std::fs::File::open(archive)?)?;
             println!("{}", serde_json::to_string(&report)?);
         }
+        Some("resolve-hpack") => {
+            let archive = args.next().ok_or("usage: hnmod resolve-hpack FILE.hpack INDEX.json")?;
+            let index_path = args.next().ok_or("missing registry index JSON path")?;
+            if args.next().is_some() { return Err("too many arguments".into()); }
+            let index = fs::read_to_string(index_path)?;
+            let plan = horizon_hnmod_core::hpack::resolve(Path::new(&archive), &index)?;
+            println!("{}", serde_json::to_string(&plan)?);
+        }
         Some("inspect-pack") => {
             let archive = args.next().ok_or("usage: hnmod inspect-pack FILE.mrpack")?;
             if args.next().is_some() { return Err("too many arguments".into()); }
@@ -183,7 +191,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("  hnmod inspect FILE.hmod|FILE.hnmod");
             eprintln!("  hnmod resolve-hmods TARGET PROFILE SDK.json MOD.hmod...");
             eprintln!("  hnmod inspect-sdk SDK.json TARGET");
-            eprintln!("  hnmod inspect-hpack FILE.hpack");
+            eprintln!("  hnmod inspect-hpack FILE.hpack");\n            eprintln!("  hnmod resolve-hpack FILE.hpack INDEX.json");
             eprintln!("  hnmod inspect-pack FILE.mrpack");
             eprintln!("  hnmod extract FILE.hnmod NEW_DIRECTORY");
             eprintln!("  hnmod prepare MODS_DIRECTORY PLAN.json");
