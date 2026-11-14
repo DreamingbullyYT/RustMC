@@ -33,9 +33,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
       - name: Run unit tests and compile CLI
         run: cargo test --locked --manifest-path hnmod-core/Cargo.toml --all-targets
+      - name: Check compiler core for Android ARM64
+        run: cargo check --locked --manifest-path hnmod-core/Cargo.toml --target aarch64-linux-android
+      - name: Verify embedded Rust compiler sources
+        run: |
+          for file in lib.rs bin/hnmod.rs hmod.rs hpack.rs modpack.rs; do
+            cmp -s "hnmod-core/src/$file" "app/src/main/assets/hnmod/hnmod-core/src/$file"
+          done
       - name: Check Termux compiler shell syntax
         run: bash -n android/termux/build-with-mods.sh
       - name: Verify Git fetch self-repair for pinned revisions
