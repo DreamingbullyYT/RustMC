@@ -181,7 +181,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         _ => {
             eprintln!("Usage:");
             eprintln!("  hnmod inspect FILE.hmod|FILE.hnmod");
-            eprintln!("  hnmod resolve-hmods TARGET PROFILE SDK_IDENTITY MOD.hmod...");
+            eprintln!("  hnmod resolve-hmods TARGET PROFILE SDK.json MOD.hmod...");
             eprintln!("  hnmod inspect-sdk SDK.json TARGET");
             eprintln!("  hnmod inspect-hpack FILE.hpack");
             eprintln!("  hnmod inspect-pack FILE.mrpack");
