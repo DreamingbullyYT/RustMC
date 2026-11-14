@@ -102,13 +102,23 @@ def verify_signature(item: dict, archive: Path, temp: Path, minisign: str, allow
 def inspect_hmod(cli: str, item: dict, archive: Path, expected_game: str) -> None:
     result = subprocess.run([cli, "inspect", str(archive)], capture_output=True, text=True)
     if result.returncode:
-        fail(f"{item['id']}: HMOD validation failed: {(result.stderr or result.stdout).strip()}")
+        fail(f"{item['id']}: package validation failed: {(result.stderr or result.stdout).strip()}")
     try:
         report = json.loads(result.stdout)
     except ValueError as error:
-        fail(f"{item['id']}: HMOD validator returned invalid JSON: {error}")
-    if report.get("format") != "hmod" or report.get("id") != item["id"] or report.get("version") != item["version"]:
+        fail(f"{item['id']}: package validator returned invalid JSON: {error}")
+    if report.get("id") != item["id"] or report.get("version") != item["version"]:
         fail(f"{item['id']}: downloaded package identity differs from its registry pin")
+
+    if item["file_name"].endswith(".hnmod"):
+        if item["kind"] != "native-mod" or report.get("format") != "hnmod":
+            fail(f"{item['id']}: legacy .hnmod is only valid for a native-mod registry project")
+        if report.get("game") != expected_game:
+            fail(f"{item['id']}: legacy native package targets a different game version")
+        return
+
+    if report.get("format") != "hmod":
+        fail(f"{item['id']}: expected a current .hmod package")
     if report.get("api") != item["api"] or report.get("side") != item["side"]:
         fail(f"{item['id']}: HMOD API or side differs from the registry index")
     if set(report.get("capabilities", [])) != set(item.get("capabilities", [])):
@@ -263,7 +273,10 @@ def install(args) -> dict:
         if not isinstance(item, dict) or item.get("kind") not in ("mod", "native-mod") or item.get("id") not in previous_mod_ids:
             continue
         folder = "horizon-native-mods" if item["kind"] == "native-mod" else "horizon-mods"
-        previous_mod_paths.add(f"{folder}/{item['id']}.hmod")
+        extension = item.get("format", ".hmod")
+        if extension not in (".hmod", ".hnmod"):
+            continue
+        previous_mod_paths.add(f"{folder}/{item['id']}{extension}")
     previous_override_hashes = previous_receipt.get("overrides", {})
     if not isinstance(previous_override_hashes, dict):
         previous_override_hashes = {}
@@ -279,8 +292,11 @@ def install(args) -> dict:
             fail("Hpack mod downloads exceed the 1 GiB profile limit")
         for item in plan["mods"]:
             filename = safe_relative(item["file_name"])
-            if len(filename.parts) != 1 or not item["file_name"].endswith(".hmod"):
-                fail(f"unsafe HMOD filename in install plan: {item['file_name']!r}")
+            valid_extension = item["file_name"].endswith(".hmod") or (
+                item.get("kind") == "native-mod" and item["file_name"].endswith(".hnmod")
+            )
+            if len(filename.parts) != 1 or not valid_extension:
+                fail(f"unsafe HMOD/HNMOD filename in install plan: {item['file_name']!r}")
             if item.get("kind") not in ("mod", "native-mod"):
                 fail(f"unsupported registry mod kind: {item.get('kind')!r}")
             archive = staging / filename
@@ -291,7 +307,8 @@ def install(args) -> dict:
                 unsigned.append(item["id"])
             inspect_hmod(args.hnmod_cli, item, archive, plan["game"])
             directory = "horizon-native-mods" if item["kind"] == "native-mod" else "horizon-mods"
-            relative = f"{directory}/{item['id']}.hmod"
+            extension = ".hnmod" if item["file_name"].endswith(".hnmod") else ".hmod"
+            relative = f"{directory}/{item['id']}{extension}"
             target = new_root / safe_relative(relative)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(archive, target)
@@ -319,6 +336,7 @@ def install(args) -> dict:
             "game": plan["game"],
             "content_fingerprint_sha256": plan["content_fingerprint_sha256"],
             "mods": [{"id": item["id"], "version": item["version"], "kind": item["kind"],
+                      "format": ".hnmod" if item["file_name"].endswith(".hnmod") else ".hmod",
                       "sha256": item["sha256"], "on": item["on"]} for item in plan["mods"]],
             "overrides": override_hashes,
         }
