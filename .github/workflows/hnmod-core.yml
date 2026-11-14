@@ -228,6 +228,64 @@ jobs:
               else:
                   raise AssertionError("path traversal archive was accepted")
           PY
+      - name: Test transactional Hpack installation
+        shell: bash
+        run: |
+          bash -n android/termux/install-hpack.sh
+          python3 -m py_compile android/termux/install-hpack.py
+          cmp android/termux/install-hpack.py app/src/main/assets/hnmod/android/termux/install-hpack.py
+          cmp android/termux/install-hpack.sh app/src/main/assets/hnmod/android/termux/install-hpack.sh
+          python3 - <<'PY'
+          import hashlib, io, json, pathlib, runpy, tempfile, types, urllib.request, zipfile
+          installer = runpy.run_path("android/termux/install-hpack.py", run_name="hpack_installer_test")
+          payload = b"validated hmod archive bytes"
+          digest = hashlib.sha256(payload).hexdigest()
+          plan = {
+              "profile_id": "cozy", "profile_name": "Cozy", "profile_version": "1.0.0",
+              "game": "26.3", "content_fingerprint_sha256": "a" * 64,
+              "overrides": ["options.txt"], "override_bytes": 12,
+              "mods": [{
+                  "id": "demo", "kind": "mod", "version": "1.0.0",
+                  "file_name": "demo-1.0.0.hmod",
+                  "url": "https://github.com/horizon-rust/horizon-mods/releases/download/demo-1.0.0/demo-1.0.0.hmod",
+                  "size": len(payload), "sha256": digest,
+                  "public_key": None, "signature": None, "on": True
+              }]
+          }
+          with tempfile.TemporaryDirectory() as temporary:
+              root = pathlib.Path(temporary)
+              pack = root / "cozy.hpack"
+              with zipfile.ZipFile(pack, "w") as archive:
+                  archive.writestr("horizon-modpack.toml", "format=1")
+                  archive.writestr("overrides/options.txt", "renderDistance=8")
+              index = root / "index.json"; index.write_text("{}")
+              cli = root / "hnmod"
+              cli.write_text(
+                  "#!/usr/bin/env python3\nimport json,sys\n"
+                  "if sys.argv[1] == 'resolve-hpack': print(" + repr(json.dumps(plan)) + ")\n"
+                  "else: print(json.dumps({'format':'hmod','id':'demo','version':'1.0.0','kind':'content'}))\n"
+              )
+              cli.chmod(0o755)
+              class Response(io.BytesIO):
+                  def geturl(self): return "https://release-assets.githubusercontent.com/download"
+              old_open = urllib.request.urlopen
+              urllib.request.urlopen = lambda *args, **kwargs: Response(payload)
+              try:
+                  args = types.SimpleNamespace(
+                      pack=pack, index=index, profiles_root=root / "profiles",
+                      hnmod_cli=str(cli), minisign="minisign", allow_unsigned=True
+                  )
+                  result = installer["install"](args)
+              finally:
+                  urllib.request.urlopen = old_open
+              profile = root / "profiles" / "cozy"
+              assert result["mods_installed"] == 1
+              assert result["unsigned_mods"] == ["demo"]
+              assert (profile / "horizon-mods/demo.hmod").read_bytes() == payload
+              assert (profile / "options.txt").read_text() == "renderDistance=8"
+              assert (profile / "horizon-mods.txt").read_text() == "mod.demo:true\n"
+              assert (profile / ".hpack-install.json").is_file()
+          PY
       - name: Verify pinned mixins build uses a local checkout
         run: |
           python3 - <<'PY'
