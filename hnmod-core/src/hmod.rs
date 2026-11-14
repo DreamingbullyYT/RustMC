@@ -242,7 +242,11 @@ mod tests {
         assert!(read_hmod(bad).is_err());
     }
     #[test] fn inspect_picks_format() {
-        let hmod = zip_of(&[(HMOD_MANIFEST, native_toml("").as_bytes()), ("src/lib.rs", b"//")]);
+        let hmod = zip_of(&[
+            (HMOD_MANIFEST, native_toml("").as_bytes()),
+            ("Cargo.toml", b"[package]\nname = \"demo\"\nversion = \"1.0.0\"\nedition = \"2024\"\n"),
+            ("src/lib.rs", b"//"),
+        ]);
         assert!(matches!(inspect(hmod).unwrap(), Inspected::Hmod { kind: "native", .. }));
         let manifest = format!("{{\"id\":\"old_mod\",\"game\":\"26.3\",\"horizon\":\"{}\",\"mixins\":\"{}\"}}", "a".repeat(40), "b".repeat(40));
         let mixin = "[mod]\nid = \"old_mod\"\nversion = \"1.0.0\"\n";
