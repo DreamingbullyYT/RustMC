@@ -137,7 +137,7 @@ object HnmodBuildAdapter {
     }
 
     /** Copies everything bundled under assets/hnmod into the private build workspace, so a new asset needs no list entry. */
-    private fun materializeProject(context: Context) {
+    internal fun materializeProject(context: Context) {
         val root = File(context.filesDir, "horizon-project")
         require(root.isDirectory || root.mkdirs()) { "Cannot create private Horizon build workspace." }
         // Drop files an older app version shipped; keep hnmod-core/target and the other build caches.
