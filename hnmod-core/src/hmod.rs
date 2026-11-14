@@ -241,6 +241,25 @@ mod tests {
         let bad = zip_of(&[(HMOD_MANIFEST, t(&"0".repeat(128)).as_bytes()), ("mod.wasm", wasm)]);
         assert!(read_hmod(bad).is_err());
     }
+    #[test] fn native_package_requires_crate_and_helper_sources() {
+        let mut manifest = native_toml("");
+        manifest.push_str("\\n[[native.mixin]]\\nid = \\"entry\\"\\ntarget = \\"horizon_client::game::Game::tick\\"\\nkind = \\"HEAD\\"\\nhelper = \\"src/mixins/entry.rs\\"\\n");
+        let cargo = b"[package]\\nname = \\"demo\\"\\nversion = \\"1.0.0\\"\\nedition = \\"2024\\"\\n";
+        let ok = zip_of(&[
+            (HMOD_MANIFEST, manifest.as_bytes()), ("Cargo.toml", cargo),
+            ("src/lib.rs", b"//"), ("src/mixins/entry.rs", b"fn entry() {}"),
+        ]);
+        assert!(read_hmod(ok).is_ok());
+
+        let missing_helper = zip_of(&[
+            (HMOD_MANIFEST, manifest.as_bytes()), ("Cargo.toml", cargo), ("src/lib.rs", b"//"),
+        ]);
+        assert!(read_hmod(missing_helper).unwrap_err().to_string().contains("existing file under src"));
+
+        let missing_crate = zip_of(&[(HMOD_MANIFEST, native_toml("").as_bytes())]);
+        assert!(read_hmod(missing_crate).unwrap_err().to_string().contains("Cargo.toml and src/lib.rs"));
+    }
+
     #[test] fn inspect_picks_format() {
         let hmod = zip_of(&[
             (HMOD_MANIFEST, native_toml("").as_bytes()),
