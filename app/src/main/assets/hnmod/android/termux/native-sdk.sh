@@ -45,7 +45,10 @@ PY
   printf '%s' "$HORIZON_FORK_RELEASE_KEY_B64" | base64 -d > "$raw"
   [[ $(wc -c < "$raw" | tr -d ' ') == 32 ]] || { echo "Invalid built-in Ed25519 release key" >&2; return 1; }
   # Ed25519 SubjectPublicKeyInfo DER prefix followed by the raw 32-byte public key.
-  { printf '\060\\052\060\\005\\006\\003\\053\\145\\160\\003\\041\\000'; cat "$raw"; } > "$der"
+  python3 - "$raw" "$der" <<'PYKEY'
+import pathlib, sys
+pathlib.Path(sys.argv[2]).write_bytes(bytes.fromhex("302a300506032b6570032100") + pathlib.Path(sys.argv[1]).read_bytes())
+PYKEY
   {
     printf '%s\n' '-----BEGIN PUBLIC KEY-----'
     base64 < "$der"
