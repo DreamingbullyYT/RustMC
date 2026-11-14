@@ -42,7 +42,7 @@ jobs:
         run: cargo check --locked --manifest-path hnmod-core/Cargo.toml --target aarch64-linux-android
       - name: Verify embedded Rust compiler sources
         run: |
-          for file in lib.rs bin/hnmod.rs hmod.rs hpack.rs modpack.rs native_plan.rs; do
+          for file in lib.rs bin/hnmod.rs hmod.rs hpack.rs modpack.rs native_plan.rs sdk.rs; do
             cmp -s "hnmod-core/src/$file" "app/src/main/assets/hnmod/hnmod-core/src/$file"
           done
       - name: Check Termux compiler shell syntax
