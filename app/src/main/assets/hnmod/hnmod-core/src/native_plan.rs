@@ -1,9 +1,8 @@
-//! Deterministic multi-mod planning for the Nov 12 native HMOD pipeline.
+//! Deterministic multi-mod planning against an exact published native SDK.
 //!
-//! This resolves a set of already validated native packages before any compiler or linker runs.
-//! It deliberately refuses mixed game/source/tool revisions: one native build must use one exact
-//! prebuilt game SDK and one exact horizon-mixins checkout.
-use crate::{dependencies, hmod::Hmod, Error};
+//! Planning never invokes a compiler. It refuses host-only SDKs for Android and mismatched pins
+//! before the launcher downloads or extracts anything.
+use crate::{dependencies, hmod::Hmod, sdk::VerifiedIdentity, Error};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -12,6 +11,9 @@ pub struct NativeBuildPlan {
     pub game: String,
     pub horizon: String,
     pub mixins: String,
+    pub target: String,
+    pub profile: String,
+    pub sdk_index_sha256: String,
     pub mods: Vec<String>,
     pub dependency_order: Vec<String>,
     pub build_key: String,
@@ -21,26 +23,29 @@ fn compatibility(message: impl Into<String>) -> Error {
     Error::Compatibility(message.into())
 }
 
-/// Resolve all selected native HMODs as one build. The returned key is stable regardless of
-/// selection order and includes every archive digest plus target/profile/SDK identity.
+/// Resolve all selected native HMODs against a parsed SDK index. The SDK index itself must already
+/// have been authenticated by the release-signature verifier before this function is used to fetch
+/// or install any SDK assets.
 pub fn resolve(
     bundles: &[Hmod],
     target: &str,
     profile: &str,
-    sdk_identity: &str,
+    sdk: &VerifiedIdentity,
 ) -> Result<NativeBuildPlan, Error> {
     if bundles.is_empty() {
         return Err(compatibility("no HMOD packages selected"));
     }
-    if target.trim().is_empty() || profile.trim().is_empty() || sdk_identity.trim().is_empty() {
-        return Err(compatibility("target, profile and SDK identity are required"));
+    if target.trim().is_empty() || profile.trim().is_empty() {
+        return Err(compatibility("target and profile are required"));
     }
+    sdk.validate().map_err(compatibility)?;
 
     let first = bundles[0].manifest.native.as_ref()
         .ok_or_else(|| compatibility(format!("{} is not a native HMOD", bundles[0].manifest.id)))?;
     let game = first.game.clone();
     let horizon = first.horizon.clone();
     let mixins = first.mixins.clone();
+    sdk.require_target(target, &game, &horizon, &mixins).map_err(compatibility)?;
 
     let mut ids = BTreeSet::new();
     let mut declared = Vec::with_capacity(bundles.len());
@@ -59,7 +64,7 @@ pub fn resolve(
         }
         if !bundle.files.contains_key("Cargo.toml") || !bundle.files.contains_key("src/lib.rs") {
             return Err(compatibility(format!(
-                "{} is missing root Cargo.toml or src/lib.rs (native HMODs use a flat project layout)",
+                "{} is missing root Cargo.toml or src/lib.rs",
                 manifest.id
             )));
         }
@@ -81,7 +86,11 @@ pub fn resolve(
     let dependency_order = order.order.into_iter().map(|i| bundles[i].manifest.id.clone()).collect();
 
     let mut hash = Sha256::new();
-    for part in [game.as_str(), horizon.as_str(), mixins.as_str(), target, profile, sdk_identity] {
+    for part in [
+        game.as_str(), horizon.as_str(), mixins.as_str(), target, profile,
+        sdk.index.build.commit.as_str(), sdk.index_sha256.as_str(),
+        sdk.index.toolchain.rust.as_str(),
+    ] {
         hash.update((part.len() as u64).to_le_bytes());
         hash.update(part.as_bytes());
     }
@@ -100,13 +109,16 @@ pub fn resolve(
     }
     let mods = versions.into_keys().collect();
 
-    Ok(NativeBuildPlan { game, horizon, mixins, mods, dependency_order, build_key })
+    Ok(NativeBuildPlan {
+        game, horizon, mixins, target: target.to_owned(), profile: profile.to_owned(),
+        sdk_index_sha256: sdk.index_sha256.clone(), mods, dependency_order, build_key,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hmod::{read_hmod, HMOD_MANIFEST};
+    use crate::{hmod::{read_hmod, HMOD_MANIFEST}, sdk::{Asset, Build, Mixins, SdkIndex, Toolchain}};
     use std::io::{Cursor, Write};
     use zip::{write::SimpleFileOptions, ZipWriter};
 
@@ -130,15 +142,34 @@ mod tests {
         read_hmod(Cursor::new(out.into_inner())).unwrap()
     }
 
+    fn sdk() -> VerifiedIdentity {
+        let mut assets = BTreeMap::new();
+        for name in ["surface.json", "build-data.tar.xz", "api-source.tar.xz"] {
+            assets.insert(name.into(), Asset { sha256: "a".repeat(64), size: 1, kind: "test".into(), codec: "xz".into(), target: None, side: None });
+        }
+        for kind in ["runtime", "api", "engine"] {
+            let name = format!("{kind}-aarch64-linux-android.tar.xz");
+            assets.insert(name, Asset { sha256: "b".repeat(64), size: 1, kind: kind.into(), codec: "xz".into(), target: Some("aarch64-linux-android".into()), side: Some("client".into()) });
+        }
+        VerifiedIdentity {
+            index: SdkIndex {
+                schema: 1,
+                build: Build { commit: "a".repeat(40), game: "26.3".into() },
+                toolchain: Toolchain { rust: "1.95.0".into() },
+                mixins: Mixins { rev: "b".repeat(40), patch: "c".repeat(64) },
+                assets,
+            },
+            index_sha256: "d".repeat(64),
+        }
+    }
+
     #[test]
     fn resolves_multiple_mods_in_dependency_order_and_stable_key() {
         let base = archive("base", "1.2.0", &"a".repeat(40), &"b".repeat(40), "");
         let consumer = archive("consumer", "1.0.0", &"a".repeat(40), &"b".repeat(40),
             "[dependencies]\nbase = \"^1.0\"\n");
-        let first = resolve(&[consumer.clone(), base.clone()], "aarch64-linux-android", "fast", "sdk-sha")
-            .unwrap();
-        let second = resolve(&[base, consumer], "aarch64-linux-android", "fast", "sdk-sha")
-            .unwrap();
+        let first = resolve(&[consumer.clone(), base.clone()], "aarch64-linux-android", "release", &sdk()).unwrap();
+        let second = resolve(&[base, consumer], "aarch64-linux-android", "release", &sdk()).unwrap();
         assert_eq!(first.dependency_order, ["base", "consumer"]);
         assert_eq!(first.build_key, second.build_key);
         assert_eq!(first.mods, ["base", "consumer"]);
@@ -148,17 +179,24 @@ mod tests {
     fn rejects_mixed_game_build_pins() {
         let one = archive("one", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
         let two = archive("two", "1.0.0", &"c".repeat(40), &"b".repeat(40), "");
-        let error = resolve(&[one, two], "aarch64-linux-android", "fast", "sdk-sha")
-            .unwrap_err().to_string();
-        assert!(error.contains("targets game/Horizon/mixins"));
+        let error = resolve(&[one, two], "aarch64-linux-android", "release", &sdk()).unwrap_err().to_string();
+        assert!(error.contains("does not match SDK"));
+    }
+
+    #[test]
+    fn rejects_sdk_without_android_target_assets() {
+        let mut sdk = sdk();
+        sdk.index.assets.retain(|name, _| !name.contains("aarch64-linux-android"));
+        let mod_one = archive("one", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
+        let error = resolve(&[mod_one], "aarch64-linux-android", "release", &sdk).unwrap_err().to_string();
+        assert!(error.contains("this target is not published"));
     }
 
     #[test]
     fn rejects_missing_required_dependency() {
         let consumer = archive("consumer", "1.0.0", &"a".repeat(40), &"b".repeat(40),
             "[dependencies]\nmissing = \"^1\"\n");
-        let error = resolve(&[consumer], "aarch64-linux-android", "fast", "sdk-sha")
-            .unwrap_err().to_string();
+        let error = resolve(&[consumer], "aarch64-linux-android", "release", &sdk()).unwrap_err().to_string();
         assert!(error.contains("requires missing mod missing"));
     }
 }
