@@ -180,7 +180,7 @@ mod tests {
         let one = archive("one", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
         let two = archive("two", "1.0.0", &"c".repeat(40), &"b".repeat(40), "");
         let error = resolve(&[one, two], "aarch64-linux-android", "release", &sdk()).unwrap_err().to_string();
-        assert!(error.contains("does not match SDK"));
+        assert!(error.contains("but this build requires"));
     }
 
     #[test]
