@@ -136,7 +136,7 @@ object EmbeddedToolchain {
                 "DEBIAN_FRONTEND=noninteractive apt install -y --fix-missing " +
                     "-o Acquire::Retries=5 -o Acquire::Queue-Mode=access " +
                     "-o Dpkg::Options::=--force-confnew " +
-                    "rust clang git rsync binutils python cmake make pkg-config coreutils",
+                    "rust clang git rsync binutils python cmake make pkg-config coreutils openssl",
                 "termux-install-build-packages", onLine = onLogLine
             )
             check(packages.exitCode == 0) {
@@ -146,7 +146,7 @@ object EmbeddedToolchain {
             onProgress("Checking Rust and native compiler")
             val smoke = EmbeddedProcessRunner.runShellCommand(
                 context,
-                "set -e; test \"\$(uname -m)\" = aarch64; cargo --version; rustc --version; clang --version; git --version; rsync --version; python --version; cmake --version; make --version; pkg-config --version; readelf --version",
+                "set -e; test \"\$(uname -m)\" = aarch64; cargo --version; rustc --version; clang --version; git --version; rsync --version; python --version; cmake --version; make --version; pkg-config --version; readelf --version; openssl version",
                 "toolchain-smoke-test", onLine = onLogLine
             )
             check(smoke.exitCode == 0) {
