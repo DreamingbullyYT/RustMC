@@ -446,25 +446,29 @@ class MainActivity : ComponentActivity() {
         AlertDialog.Builder(this)
             .setTitle("Install Horizon modpack?")
             .setMessage(
-                "Horizon will read this .hpack, resolve its exact mod versions against the official Horizon registry, " +
-                    "download and verify the packages, then install them into a separate private profile. " +
-                    "This does not activate the profile or execute mod code. Unsigned packages are refused by default."
+                "Horizon resolves exact mod versions against the official registry, downloads and verifies their hashes, " +
+                    "then installs them into a separate private profile. This does not activate the profile or execute mod code. " +
+                    "Choose signed-only for the safer default. Allow unsigned only when you trust the listed mod authors; " +
+                    "unsigned files have no author minisign signature."
             )
             .setNegativeButton("Cancel", null)
-            .setPositiveButton("Install modpack") { _, _ ->
-                run("Installing Horizon modpack") {
-                    dev.horizon.launcher.data.EmbeddedToolchain.installHpack(
-                        this, uri, allowUnsigned = false,
-                        onProgress = { message -> runOnUiThread { show(message) } },
-                        onLogLine = { message ->
-                            if (message.startsWith("WARNING:") || message.startsWith("ERROR:") || message.startsWith("Hpack")) {
-                                runOnUiThread { show(message) }
-                            }
-                        }
-                    )
-                }
-            }
+            .setPositiveButton("Signed packages only") { _, _ -> installHpack(uri, allowUnsigned = false) }
+            .setNeutralButton("Allow unsigned") { _, _ -> installHpack(uri, allowUnsigned = true) }
             .show()
+    }
+
+    private fun installHpack(uri: Uri, allowUnsigned: Boolean) {
+        run("Installing Horizon modpack") {
+            dev.horizon.launcher.data.EmbeddedToolchain.installHpack(
+                this, uri, allowUnsigned = allowUnsigned,
+                onProgress = { message -> runOnUiThread { show(message) } },
+                onLogLine = { message ->
+                    if (message.startsWith("WARNING:") || message.startsWith("ERROR:") || message.startsWith("Hpack")) {
+                        runOnUiThread { show(message) }
+                    }
+                }
+            )
+        }
     }
 
     private fun confirmAndImportBuild(uri: Uri) {
