@@ -184,7 +184,10 @@ jobs:
               index = {
                   "schema": 1,
                   "build": {"commit": commit, "game": "26.3", "date": "2026-11-14"},
+                  "package_format": 1,
                   "toolchain": {"rust": "1.95.0"},
+                  "content_api": "0.2",
+                  "surface": {"hash": "e" * 64, "previous": None, "changes": []},
                   "mixins": {"rev": "b" * 40, "patch": "c" * 64},
                   "assets": assets,
                   "inputs": {"routes": {}, "how": {}}
