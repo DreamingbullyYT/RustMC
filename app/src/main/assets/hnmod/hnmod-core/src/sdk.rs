@@ -1,8 +1,8 @@
 //! Reader for the signed-release SDK index shape used by arismoko/horizon.
 //!
-//! This module validates identity and target coverage only. It deliberately does not claim to
-//! authenticate a download: signature verification and SDK acquisition must happen before an
-//! index or any of its assets is trusted or installed.
+//! This module reads only an SDK directory installed by the signed-release installer. It checks
+//! the install receipt, index identity, raw selected-asset hashes and the extracted tree before
+//! a native build may use the SDK.
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
@@ -67,12 +67,60 @@ struct InstallReceipt {
     target: String,
     game_commit: String,
     mixins_rev: String,
+    files: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug)]
 pub struct VerifiedIdentity {
     pub index: SdkIndex,
     pub index_sha256: String,
+}
+
+
+
+fn hash_file(path: &Path) -> Result<(u64, String), String> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let size = file.metadata().map_err(|e| e.to_string())?.len();
+    let mut digest = Sha256::new();
+    let mut buffer = [0u8; 128 * 1024];
+    loop {
+        let count = file.read(&mut buffer).map_err(|e| e.to_string())?;
+        if count == 0 { break; }
+        digest.update(&buffer[..count]);
+    }
+    Ok((size, format!("{:x}", digest.finalize())))
+}
+
+fn hash_tree(root: &Path, current: &Path, output: &mut BTreeMap<String, String>) -> Result<(), String> {
+    let entries = std::fs::read_dir(current).map_err(|e| format!("{}: {e}", current.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        let kind = entry.file_type().map_err(|e| e.to_string())?;
+        if kind.is_symlink() {
+            return Err(format!("SDK cache contains a symlink: {}", path.display()));
+        }
+        if kind.is_dir() {
+            hash_tree(root, &path, output)?;
+        } else if kind.is_file() {
+            use std::io::Read;
+            let mut file = std::fs::File::open(&path).map_err(|e| e.to_string())?;
+            let mut digest = Sha256::new();
+            let mut buffer = [0u8; 64 * 1024];
+            loop {
+                let count = file.read(&mut buffer).map_err(|e| e.to_string())?;
+                if count == 0 { break; }
+                digest.update(&buffer[..count]);
+            }
+            let relative = path.strip_prefix(root).map_err(|e| e.to_string())?;
+            let key = relative.to_str().ok_or_else(|| "SDK cache path is not UTF-8".to_owned())?.to_owned();
+            output.insert(key, format!("{:x}", digest.finalize()));
+        } else {
+            return Err(format!("SDK cache contains a special file: {}", path.display()));
+        }
+    }
+    Ok(())
 }
 
 impl VerifiedIdentity {
@@ -102,6 +150,26 @@ impl VerifiedIdentity {
         }
         let identity = Self { index, index_sha256 };
         identity.validate()?;
+        for name in [
+            "surface.json", "build-data.tar.xz", "api-source.tar.xz",
+            "runtime-aarch64-linux-android.tar.xz",
+            "api-aarch64-linux-android.tar.xz",
+            "engine-aarch64-linux-android.tar.xz",
+        ] {
+            let asset = identity.index.assets.get(name)
+                .ok_or_else(|| format!("SDK index is missing required asset {name}"))?;
+            let path = directory.join(name);
+            let (size, digest) = hash_file(&path)?;
+            if size != asset.size || digest != asset.sha256 {
+                return Err(format!("installed SDK asset {name} does not match sdk.json"));
+            }
+        }
+        let slices = directory.join("slices");
+        let mut files = BTreeMap::new();
+        hash_tree(&slices, &slices, &mut files)?;
+        if files != receipt.files {
+            return Err("SDK extracted files do not match the signed installation receipt".into());
+        }
         Ok(identity)
     }
 
@@ -210,8 +278,15 @@ mod tests {
         let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let temp = std::env::temp_dir().join(format!("hnmod-sdk-test-{}-{nonce}", std::process::id()));
         let _ = std::fs::remove_dir_all(&temp);
-        std::fs::create_dir_all(&temp).unwrap();
-        let value = index("aarch64-linux-android");
+        std::fs::create_dir_all(temp.join("slices")).unwrap();
+        let mut value = index("aarch64-linux-android");
+        let assets = value["assets"].as_object_mut().unwrap();
+        for (name, asset) in assets.iter_mut() {
+            let data = format!("asset:{name}").into_bytes();
+            std::fs::write(temp.join(name), &data).unwrap();
+            asset["sha256"] = serde_json::json!(format!("{:x}", Sha256::digest(&data)));
+            asset["size"] = serde_json::json!(data.len());
+        }
         let bytes = serde_json::to_vec(&value).unwrap();
         std::fs::write(temp.join("sdk.json"), &bytes).unwrap();
         let parsed: SdkIndex = serde_json::from_slice(&bytes).unwrap();
@@ -227,6 +302,13 @@ mod tests {
         });
         std::fs::write(temp.join(".install-manifest.json"), serde_json::to_vec(&receipt).unwrap()).unwrap();
         assert!(VerifiedIdentity::read(&temp).is_ok());
+        std::fs::write(temp.join("runtime-aarch64-linux-android.tar.xz"), b"tampered").unwrap();
+        assert!(VerifiedIdentity::read(&temp).unwrap_err().contains("does not match sdk.json"));
+        std::fs::write(temp.join("runtime-aarch64-linux-android.tar.xz"), b"asset:runtime-aarch64-linux-android.tar.xz").unwrap();
+        std::fs::create_dir_all(temp.join("slices/runtime")).unwrap();
+        std::fs::write(temp.join("slices/runtime/marker"), b"tampered").unwrap();
+        assert!(VerifiedIdentity::read(&temp).unwrap_err().contains("extracted files"));
+        std::fs::remove_file(temp.join("slices/runtime/marker")).unwrap();
         let mut bad = receipt;
         bad["signature_verified"] = serde_json::Value::Bool(false);
         std::fs::write(temp.join(".install-manifest.json"), serde_json::to_vec(&bad).unwrap()).unwrap();
