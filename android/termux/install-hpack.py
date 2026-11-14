@@ -123,9 +123,10 @@ def extract_overrides(pack_path: Path, names: list[str], destination: Path) -> i
             fail("hpack contains duplicate ZIP entries")
         for relative in names:
             path = safe_relative(relative)
-            if relative not in all_names:
+            entry_name = f"overrides/{relative}"
+            if entry_name not in all_names:
                 fail(f"hpack override is missing: {relative}")
-            info = archive.getinfo(f"overrides/{relative}")
+            info = archive.getinfo(entry_name)
             mode = (info.external_attr >> 16) & 0o170000
             if mode not in (0, 0o100000):
                 fail(f"hpack override is a link or special file: {relative}")
@@ -192,7 +193,6 @@ def commit_files(profile: Path, staging: Path, relative_files: list[str]) -> Non
 
 
 def install(args) -> dict:
-    profile_id = args.pack.stem
     profile_root = args.profiles_root.resolve()
     profile_root.mkdir(parents=True, exist_ok=True)
     # Resolve through the Rust reader each time: the plan is never accepted from an untrusted sidecar.
@@ -206,10 +206,13 @@ def install(args) -> dict:
         plan = json.loads(result.stdout)
     except ValueError as error:
         fail(f"Hpack resolver returned invalid JSON: {error}")
-    if not plan.get("profile_id") or not plan.get("mods"):
-        fail("Hpack resolver returned an empty or invalid install plan")
-    profile = profile_root / plan["profile_id"]
-    if profile.exists() and profile.is_symlink():
+    if not isinstance(plan.get("profile_id"), str) or not isinstance(plan.get("mods"), list):
+        fail("Hpack resolver returned an invalid install plan")
+    profile_component = safe_relative(plan["profile_id"])
+    if len(profile_component.parts) != 1:
+        fail("Hpack profile id is not a single safe path component")
+    profile = profile_root / profile_component
+    if profile.is_symlink():
         fail("profile directory is a symlink")
     profile.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".hpack-stage-", dir=profile))
