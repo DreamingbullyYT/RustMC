@@ -241,12 +241,12 @@ mod tests {
 
     fn archive(id: &str, version: &str, horizon: &str, mixins: &str, dependencies: &str) -> Hmod {
         let dependency_table = if dependencies.is_empty() {
-            "dependencies = {}\\n".to_owned()
+            "dependencies = {}\n".to_owned()
         } else {
-            format!("{dependencies}\\n")
+            format!("{dependencies}\n")
         };
         let manifest = format!(
-            "id = \\"{id}\\"\\nname = \\"{id}\\"\\nversion = \\"{version}\\"\\ndescription = \\"native test mod\\"\\nauthors = []\\nlicense = \\"MIT\\"\\ncredits = \\"\\"\\napi = \\"0.2\\"\\nside = \\"client\\"\\ncapabilities = []\\nnamespaces = []\\n{dependency_table}[native]\\ngame = \\"26.3\\"\\nhorizon = \\"{horizon}\\"\\nmixins = \\"{mixins}\\"\\n"
+            "id = \\"{id}\\"\nname = \\"{id}\\"\nversion = \\"{version}\\"\ndescription = \\"native test mod\\"\nauthors = []\nlicense = \\"MIT\\"\ncredits = \\"\\"\napi = \\"0.2\\"\nside = \\"client\\"\ncapabilities = []\nnamespaces = []\n{dependency_table}[native]\ngame = \\"26.3\\"\nhorizon = \\"{horizon}\\"\nmixins = \\"{mixins}\\"\n"
         );
         let cargo = "[package]\nname = \"test-mod\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[dependencies]\nhorizon-mod-api = { path = \".horizon/sdk/api/crates/horizon-mod-api\" }\n";
         let mut out = Cursor::new(Vec::new());
