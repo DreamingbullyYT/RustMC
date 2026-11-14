@@ -210,6 +210,8 @@ def safe_extract(archive: Path, destination: Path) -> None:
             fail(f"SDK archive has too many entries: {archive.name}")
         total = 0
         for member in members:
+            if member.isdir() and member.name in (".", "./"):
+                continue
             relative = PurePosixPath(member.name)
             if relative.is_absolute() or not relative.parts or any(part in ("", ".", "..") for part in relative.parts):
                 fail(f"unsafe path in SDK archive {archive.name}: {member.name!r}")
@@ -222,6 +224,8 @@ def safe_extract(archive: Path, destination: Path) -> None:
             if target != root and root not in target.parents:
                 fail(f"SDK archive path escapes its destination: {member.name!r}")
         for member in members:
+            if member.isdir() and member.name in (".", "./"):
+                continue
             target = destination / Path(*PurePosixPath(member.name).parts)
             if member.isdir():
                 target.mkdir(parents=True, exist_ok=True)
