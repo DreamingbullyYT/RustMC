@@ -79,7 +79,7 @@ jobs:
     name: Build APK
     # Keep APK builds out of incremental compiler PR work. Build on main, version tags,
     # or an explicit Actions dispatch after the compiler/installer gates are complete.
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/android-hmod-native-api' || startsWith(github.ref, 'refs/tags/v'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
