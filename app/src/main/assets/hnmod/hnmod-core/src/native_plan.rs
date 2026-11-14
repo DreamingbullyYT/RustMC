@@ -19,6 +19,122 @@ pub struct NativeBuildPlan {
     pub build_key: String,
 }
 
+
+const API_PACKAGES: [&str; 3] = [
+    "horizon-mod-api",
+    "horizon-mod-points",
+    "horizon-internals",
+];
+
+fn dependency_tables(cargo: &toml::Table) -> Vec<(Option<&str>, &toml::Table)> {
+    let mut tables = Vec::new();
+    if let Some(table) = cargo.get("dependencies").and_then(toml::Value::as_table) {
+        tables.push((None, table));
+    }
+    if let Some(targets) = cargo.get("target").and_then(toml::Value::as_table) {
+        for (target, config) in targets {
+            if let Some(table) = config.get("dependencies").and_then(toml::Value::as_table) {
+                tables.push((Some(target.as_str()), table));
+            }
+        }
+    }
+    tables
+}
+
+
+fn all_dependency_tables(cargo: &toml::Table) -> Vec<(String, &toml::Table)> {
+    const SECTIONS: [&str; 5] = [
+        "dependencies", "dev-dependencies", "build-dependencies",
+        "dev_dependencies", "build_dependencies",
+    ];
+    let mut tables = Vec::new();
+    for section in SECTIONS {
+        if let Some(table) = cargo.get(section).and_then(toml::Value::as_table) {
+            tables.push((section.to_owned(), table));
+        }
+    }
+    if let Some(targets) = cargo.get("target").and_then(toml::Value::as_table) {
+        for (target, config) in targets {
+            for section in SECTIONS {
+                if let Some(table) = config.get(section).and_then(toml::Value::as_table) {
+                    tables.push((format!("target.{target}.{section}"), table));
+                }
+            }
+        }
+    }
+    tables
+}
+
+/// Mirror the upstream prebuilt compiler's refusal rules before any Cargo process can run.
+fn validate_native_crate(bundle: &Hmod) -> Result<(), Error> {
+    let id = &bundle.manifest.id;
+    if bundle.files.contains_key(".cargo/config") || bundle.files.contains_key(".cargo/config.toml") {
+        return Err(compatibility(format!("{id}: E_NATIVE_CARGO_CONFIG: .cargo/config is not allowed in native mods")));
+    }
+    let bytes = bundle.files.get("Cargo.toml")
+        .ok_or_else(|| compatibility(format!("{id}: missing Cargo.toml")))?;
+    let text = std::str::from_utf8(bytes)
+        .map_err(|_| compatibility(format!("{id}: Cargo.toml is not UTF-8")))?;
+    let cargo: toml::Table = toml::from_str(text)
+        .map_err(|e| compatibility(format!("{id}: invalid Cargo.toml: {e}")))?;
+    for section in ["patch", "replace"] {
+        if cargo.contains_key(section) {
+            return Err(compatibility(format!("{id}: E_NATIVE_CARGO_PATCH: [{section}] is not allowed")));
+        }
+    }
+    let package = cargo.get("package").and_then(toml::Value::as_table)
+        .ok_or_else(|| compatibility(format!("{id}: Cargo.toml has no [package] table")))?;
+    if package.get("name").and_then(toml::Value::as_str).is_none() {
+        return Err(compatibility(format!("{id}: Cargo.toml has no package.name")));
+    }
+    let build = package.get("build");
+    let has_build_script = build.is_some_and(|value| value.as_bool() != Some(false))
+        || (build.and_then(toml::Value::as_bool) != Some(false) && bundle.files.contains_key("build.rs"))
+        || cargo.get("build-dependencies").and_then(toml::Value::as_table).is_some_and(|t| !t.is_empty());
+    if has_build_script {
+        return Err(compatibility(format!("{id}: E_NATIVE_BUILD_SCRIPT: build scripts/build-dependencies are not supported by the prebuilt SDK route")));
+    }
+    if cargo.get("features").and_then(toml::Value::as_table).is_some_and(|t| !t.is_empty()) {
+        return Err(compatibility(format!("{id}: E_NATIVE_FEATURES: Cargo features are not supported by the pinned SDK route")));
+    }
+
+    for (section, dependencies) in all_dependency_tables(&cargo) {
+        for (key, value) in dependencies {
+            let package_name = value.get("package").and_then(toml::Value::as_str).unwrap_or(key);
+            if package_name == "horizon-client" {
+                return Err(compatibility(format!("{id}: E_GAME_DEPENDENCY: {key} directly depends on horizon-client")));
+            }
+            let is_api = API_PACKAGES.contains(&package_name);
+            for selector in ["git", "registry", "registry-index", "branch", "rev", "tag", "workspace"] {
+                if value.get(selector).is_some() {
+                    return Err(compatibility(format!("{id}: E_SDK_SOURCE: {section}.{key} uses forbidden {selector} source selector")));
+                }
+            }
+            if is_api {
+                let expected = format!(".horizon/sdk/api/crates/{package_name}");
+                if value.get("path").and_then(toml::Value::as_str) != Some(expected.as_str()) {
+                    return Err(compatibility(format!("{id}: E_SDK_SOURCE: {section}.{key} must use pinned SDK path {expected}")));
+                }
+                let features = value.get("features").and_then(toml::Value::as_array).is_some_and(|v| !v.is_empty());
+                let no_defaults = value.get("default-features").and_then(toml::Value::as_bool) == Some(false);
+                if features || no_defaults {
+                    return Err(compatibility(format!("{id}: E_NATIVE_FEATURES: {section}.{key} changes the pinned SDK feature set")));
+                }
+            }
+        }
+    }
+
+    let has_api = dependency_tables(&cargo).iter().any(|(target, dependencies)| {
+        target.is_none() && dependencies.iter().any(|(key, value)| {
+            value.get("package").and_then(toml::Value::as_str).unwrap_or(key) == "horizon-mod-api"
+        })
+    });
+    if !has_api {
+        return Err(compatibility(format!("{id}: E_NATIVE_API_DEPENDENCY: Cargo.toml must depend on horizon-mod-api in [dependencies]")));
+    }
+    Ok(())
+}
+
 fn compatibility(message: impl Into<String>) -> Error {
     Error::Compatibility(message.into())
 }
@@ -62,12 +178,13 @@ pub fn resolve(
                 manifest.id, native.game, native.horizon, native.mixins, game, horizon, mixins
             )));
         }
-        if !bundle.files.contains_key("Cargo.toml") || !bundle.files.contains_key("src/lib.rs") {
+        if !bundle.files.contains_key("src/lib.rs") {
             return Err(compatibility(format!(
-                "{} is missing root Cargo.toml or src/lib.rs",
+                "{} is missing root src/lib.rs",
                 manifest.id
             )));
         }
+        validate_native_crate(bundle)?;
         let dependency_table = toml::Value::Table(
             manifest.dependencies.iter().map(|(key, value)| (key.clone(), value.clone())).collect::<toml::Table>()
         );
@@ -126,7 +243,7 @@ mod tests {
         let manifest = format!(
             "id = \"{id}\"\nversion = \"{version}\"\napi = \"0.2\"\n[native]\ngame = \"26.3\"\nhorizon = \"{horizon}\"\nmixins = \"{mixins}\"\n{dependencies}"
         );
-        let cargo = "[package]\nname = \"test-mod\"\nversion = \"0.1.0\"\nedition = \"2024\"\n";
+        let cargo = "[package]\nname = \"test-mod\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[dependencies]\nhorizon-mod-api = { path = \".horizon/sdk/api/crates/horizon-mod-api\" }\n";
         let mut out = Cursor::new(Vec::new());
         {
             let mut zip = ZipWriter::new(&mut out);
@@ -167,6 +284,35 @@ mod tests {
             },
             index_sha256: "d".repeat(64),
         }
+    }
+
+
+    #[test]
+    fn rejects_native_cargo_build_scripts_and_features_before_cargo() {
+        let mut build_script = archive("build-script", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
+        build_script.files.insert("build.rs".into(), b"fn main() {}".to_vec());
+        assert!(resolve(&[build_script], "aarch64-linux-android", "release", &sdk()).unwrap_err().to_string().contains("E_NATIVE_BUILD_SCRIPT"));
+
+        let mut feature = archive("feature-mod", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
+        let mut cargo = String::from_utf8(feature.files["Cargo.toml"].clone()).unwrap();
+        cargo.push_str("[features]\ndefault = []\nfast = []\n");
+        feature.files.insert("Cargo.toml".into(), cargo.into_bytes());
+        assert!(resolve(&[feature], "aarch64-linux-android", "release", &sdk()).unwrap_err().to_string().contains("E_NATIVE_FEATURES"));
+    }
+
+    #[test]
+    fn rejects_unpinned_sdk_sources_and_direct_game_dependencies() {
+        let mut wrong_path = archive("wrong-path", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
+        let cargo = String::from_utf8(wrong_path.files["Cargo.toml"].clone()).unwrap()
+            .replace(".horizon/sdk/api/crates/horizon-mod-api", "../horizon-mod-api");
+        wrong_path.files.insert("Cargo.toml".into(), cargo.into_bytes());
+        assert!(resolve(&[wrong_path], "aarch64-linux-android", "release", &sdk()).unwrap_err().to_string().contains("E_SDK_SOURCE"));
+
+        let mut game_dep = archive("game-dep", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
+        let cargo = String::from_utf8(game_dep.files["Cargo.toml"].clone()).unwrap()
+            + "horizon-client = { version = \"0.1\" }\n";
+        game_dep.files.insert("Cargo.toml".into(), cargo.into_bytes());
+        assert!(resolve(&[game_dep], "aarch64-linux-android", "release", &sdk()).unwrap_err().to_string().contains("E_GAME_DEPENDENCY"));
     }
 
     #[test]
