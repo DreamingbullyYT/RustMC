@@ -202,7 +202,7 @@ jobs:
                          "--release-dir", str(release), "--cache-dir", str(cache), "--verifier", str(verifier)]
               subprocess.run(command, env=env, check=True)
               installed = cache / f"{commit}-{target}"
-              assert (installed / "slices/runtime-" + pathlib.Path(target) / "marker.txt").is_file() if False else (installed / "slices" / f"runtime-{target}" / "marker.txt").is_file()
+              assert (installed / "slices" / f"runtime-{target}" / "marker.txt").is_file()
               # A tampered signed asset must be rejected even when a previous cache entry exists.
               with (release / f"runtime-{target}.tar.xz").open("ab") as stream: stream.write(b"tamper")
               rejected = subprocess.run(command, env=env, capture_output=True, text=True)
