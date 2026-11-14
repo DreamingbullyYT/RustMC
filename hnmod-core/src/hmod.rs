@@ -136,6 +136,24 @@ pub fn read_hmod<R: Read + Seek>(reader: R) -> Result<Hmod, Error> {
             return Err(Error::Manifest("mod.wasm does not match [wasm].sha512".into()));
         }
     }
+    if let Some(native) = &manifest.native {
+        if !files.contains_key("Cargo.toml") || !files.contains_key("src/lib.rs") {
+            return Err(Error::Manifest("a native .hmod needs root Cargo.toml and src/lib.rs".into()));
+        }
+        for row in native.mixin.iter().chain(&native.loops) {
+            if let Some(helper) = row.options.get("helper").and_then(toml::Value::as_str) {
+                let path = std::path::Path::new(helper);
+                if !helper.starts_with("src/") || path.is_absolute()
+                    || !path.components().all(|part| matches!(part, std::path::Component::Normal(_)))
+                    || !files.contains_key(helper)
+                {
+                    return Err(Error::Manifest(format!("{}: helper must be an existing file under src/", row.id)));
+                }
+            } else {
+                return Err(Error::Manifest(format!("{}: missing helper path", row.id)));
+            }
+        }
+    }
     let sha256 = digest(&files);
     Ok(Hmod { manifest, files, sha256 })
 }
