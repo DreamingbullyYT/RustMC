@@ -36,8 +36,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let sdk = horizon_hnmod_core::sdk::VerifiedIdentity::read(Path::new(&path))?;
             sdk.require_target(&target, &sdk.index.build.game, &sdk.index.build.commit, &sdk.index.mixins.rev)?;
             println!("{}", serde_json::to_string(&json!({
-                "build": sdk.index.build, "mixins": sdk.index.mixins,
-                "toolchain": sdk.index.toolchain, "target": target,
+                "game": sdk.index.build.game,
+                "commit": sdk.index.build.commit,
+                "mixins": sdk.index.mixins.rev,
+                "rust": sdk.index.toolchain.rust,
+                "target": target,
                 "index_sha256": sdk.index_sha256,
                 "authenticated": false
             }))?);
@@ -178,8 +181,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         _ => {
             eprintln!("Usage:");
             eprintln!("  hnmod inspect FILE.hmod|FILE.hnmod");
-            eprintln!("  hnmod resolve-hmods TARGET PROFILE SDK_IDENTITY MOD.hmod...");
-            eprintln!("  hnmod inspect-sdk SDK.json TARGET");\n            eprintln!("  hnmod inspect-sdk SDK.json TARGET");
+            eprintln!("  hnmod resolve-hmods TARGET PROFILE SDK.json MOD.hmod...");
+            eprintln!("  hnmod inspect-sdk SDK.json TARGET");
             eprintln!("  hnmod inspect-hpack FILE.hpack");
             eprintln!("  hnmod inspect-pack FILE.mrpack");
             eprintln!("  hnmod extract FILE.hnmod NEW_DIRECTORY");
