@@ -57,7 +57,9 @@ The upstream `tools/prebuilt_game.py build` currently uses the build machine's `
    - Resolve each `.hpack` mod pin against an index snapshot: exact project ID, version, game version and SHA-256; reject revoked packages and untrusted download URLs.
    - Download packages over HTTPS, check exact size/SHA-256 and verify minisign when the project has a signing key. Unsigned projects require explicit opt-in.
    - Validate every downloaded `.hmod`, stage all mods and overrides, update the profile mod list, then commit with rollback. Remove stale pack-owned mods on updates; preserve user-edited overrides.
-   - The Kotlin toolchain bridge can import a local `.hpack` plus a registry-index file into a private profile directory. The profile is not yet selectable/active in the launcher, and the app does not yet fetch the official registry index automatically.
+   - The Compile screen exposes `.hpack` import. By default the app fetches the official `horizon-rust.github.io/horizon-mods/index.json`, validates its schema, and caches it for 10 minutes; on refresh failure it may use a validated cache up to seven days old. A user-selected local index remains available for testing.
+   - The installer resolves exact registry pins, checks SHA-256 and minisign signatures, refuses unsigned packages by default (with a separate explicit opt-in), and writes to an isolated private profile. It does not execute mod code during import.
+   - The profile is not yet selectable/active in the launcher. The UI states this before installation; profile activation and wiring its game folder into the launcher's selected instance remain open work.
    - Keep `.mrpack` import as a separate porting pipeline. Fabric/NeoForge Java JARs are not executable on Horizon; only compatible data/assets are carried over or mods are ported.
    - Do not call a read-only inspector an installer.
 
