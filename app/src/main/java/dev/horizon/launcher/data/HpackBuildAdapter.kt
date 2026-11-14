@@ -28,6 +28,7 @@ object HpackBuildAdapter {
         require(input.isDirectory || input.mkdirs()) { "Cannot create private Hpack input directory." }
         try {
             val pack = copyUri(context, packUri, File(input, "selected.hpack"), MAX_PACK_BYTES, "Hpack")
+            onLogLine(if (indexUri == null) "Refreshing official Horizon mod registry index" else "Using selected registry index")
             val index = if (indexUri != null) {
                 copyUri(context, indexUri, File(input, "registry-index.json"), MAX_INDEX_BYTES, "Registry index")
             } else {
@@ -68,7 +69,7 @@ object HpackBuildAdapter {
                 val connection = (URL(INDEX_URL).openConnection() as HttpsURLConnection).apply {
                     connectTimeout = 15_000
                     readTimeout = 45_000
-                    instanceFollowRedirects = true
+                    instanceFollowRedirects = false
                     requestMethod = "GET"
                     setRequestProperty("User-Agent", "rustMC-Android-Hpack/1")
                     setRequestProperty("Accept", "application/json")
@@ -77,9 +78,8 @@ object HpackBuildAdapter {
                     check(connection.responseCode == HttpsURLConnection.HTTP_OK) {
                         "Horizon registry returned HTTP ${connection.responseCode}."
                     }
-                    val finalUrl = URL(connection.url.toString())
-                    check(finalUrl.protocol == "https" && finalUrl.host == "horizon-rust.github.io") {
-                        "Horizon registry redirected to an untrusted host."
+                    check(connection.url.protocol == "https" && connection.url.host == "horizon-rust.github.io") {
+                        "Horizon registry URL is not the trusted HTTPS endpoint."
                     }
                     connection.inputStream.use { input ->
                         FileOutputStream(temporary).use { output ->
@@ -106,18 +106,11 @@ object HpackBuildAdapter {
                 }
             } catch (error: Exception) {
                 temporary.delete()
-                if (!cached.isFile || System.currentTimeMillis() - cached.lastModified() > INDEX_CACHE_MS) {
-                    throw IllegalStateException("Could not refresh the Horizon registry index: ${error.message}", error)
-                }
-                onRegistryCacheFallback()
+                throw IllegalStateException("Could not refresh the Horizon registry index: ${error.message}", error)
             }
         }
         cached.copyTo(destination, overwrite = true)
         return destination
-    }
-
-    private fun onRegistryCacheFallback() {
-        // The caller's build log reports the selected cache file when resolution starts.
     }
 
     private fun copyUri(
