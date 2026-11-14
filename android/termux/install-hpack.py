@@ -297,23 +297,30 @@ def install(args) -> dict:
             previous_receipt = json.loads(previous_receipt_path.read_text(encoding="utf-8"))
         except ValueError as error:
             fail(f"previous Hpack receipt is invalid; refusing update: {error}")
-        if not isinstance(previous_receipt, dict) or not isinstance(previous_receipt.get("mods", []), list):
-            fail("previous Hpack receipt has an invalid mods list; refusing update")
+        if (not isinstance(previous_receipt, dict)
+                or previous_receipt.get("format") != "hpack"
+                or previous_receipt.get("id") != plan["profile_id"]
+                or not isinstance(previous_receipt.get("mods", []), list)):
+            fail("previous Hpack receipt does not own this profile or has an invalid mods list")
+    elif any(profile.iterdir()):
+        fail("profile directory already contains files but has no Hpack ownership receipt; refusing to overwrite it")
     previous_mod_ids = {
         item.get("id") for item in previous_receipt.get("mods", [])
         if isinstance(item, dict) and isinstance(item.get("id"), str)
         and item.get("id").isascii() and item.get("id").replace("_", "").isalnum()
         and item.get("id") == item.get("id").lower() and 1 <= len(item.get("id")) <= 64
     }
-    previous_mod_paths = set()
+    previous_mod_hashes = {}
     for item in previous_receipt.get("mods", []):
         if not isinstance(item, dict) or item.get("kind") not in ("mod", "native-mod") or item.get("id") not in previous_mod_ids:
             continue
-        folder = "horizon-native-mods" if item["kind"] == "native-mod" else "horizon-mods"
         extension = item.get("format", ".hmod")
-        if extension not in (".hmod", ".hnmod"):
+        digest = item.get("sha256")
+        if (extension not in (".hmod", ".hnmod") or not isinstance(digest, str)
+                or len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest)):
             continue
-        previous_mod_paths.add(f"{folder}/{item['id']}{extension}")
+        folder = "horizon-native-mods" if item["kind"] == "native-mod" else "horizon-mods"
+        previous_mod_hashes[f"{folder}/{item['id']}{extension}"] = digest
     previous_override_hashes = previous_receipt.get("overrides", {})
     if not isinstance(previous_override_hashes, dict):
         previous_override_hashes = {}
@@ -388,7 +395,20 @@ def install(args) -> dict:
         receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True), encoding="utf-8")
         relative_files = downloaded + overrides + ["horizon-mods.txt", ".hpack-install.json"]
         new_mod_paths = set(downloaded)
-        stale_mod_paths = previous_mod_paths - new_mod_paths
+        # A receipt is not permission to overwrite a user's modified or unowned mod file.
+        for relative in downloaded:
+            target = safe_target(profile, relative)
+            if target.exists():
+                expected = previous_mod_hashes.get(relative)
+                if target.is_symlink() or not target.is_file() or expected is None or sha256(target) != expected:
+                    fail(f"refusing to overwrite an unowned or user-modified mod file: {relative}")
+        stale_mod_paths = []
+        for relative, old_hash in previous_mod_hashes.items():
+            if relative in new_mod_paths:
+                continue
+            target = safe_target(profile, relative)
+            if target.is_file() and not target.is_symlink() and sha256(target) == old_hash:
+                stale_mod_paths.append(relative)
         new_override_paths = set(overrides)
         stale_override_paths = []
         for relative, old_hash in previous_override_hashes.items():
