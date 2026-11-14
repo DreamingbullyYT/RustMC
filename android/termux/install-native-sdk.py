@@ -171,7 +171,7 @@ def validate_index(release_dir: Path, commit: str, target: str) -> dict:
         if not isinstance(asset, dict) or not re.fullmatch(r"[0-9a-f]{64}", asset.get("sha256", "")) or not isinstance(asset.get("size"), int) or asset["size"] <= 0:
             fail(f"invalid SDK asset checksum or size: {name}")
         if name not in STATIC and name not in ("build-data.tar.xz", "api-source.tar.xz"):
-            parsed = re.fullmatch(r"(runtime|api|engine)-([a-z0-9_-]+)(-server)?\\.tar\\.xz", name)
+            parsed = re.fullmatch(r"(runtime|api|engine)-([a-z0-9_-]+)(-server)?\.tar\.xz", name)
             if not parsed:
                 fail(f"unknown SDK asset name: {name}")
             expected_side = "server" if parsed.group(3) else "client"
