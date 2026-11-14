@@ -51,24 +51,24 @@ pub struct Inject {
 #[serde(deny_unknown_fields)]
 pub struct HmodManifest {
     pub id: String,
-    #[serde(default)] pub name: String,
+    pub name: String,
     pub version: String,
+    pub description: String,
+    pub authors: Vec<String>,
+    pub license: String,
+    pub license_url: Option<String>,
+    pub credits: String,
+    pub homepage: Option<String>,
+    pub issues: Option<String>,
     pub api: String,
-    #[serde(default)] pub description: String,
-    #[serde(default)] pub authors: Vec<String>,
-    #[serde(default)] pub license: String,
-    #[serde(default)] pub license_url: Option<String>,
-    #[serde(default)] pub credits: String,
-    #[serde(default)] pub homepage: Option<String>,
-    #[serde(default)] pub issues: Option<String>,
-    #[serde(default)] pub side: String,
-    #[serde(default)] pub namespaces: Vec<String>,
+    pub side: String,
+    pub capabilities: Vec<String>,
+    pub namespaces: Vec<String>,
+    pub dependencies: BTreeMap<String, toml::Value>,
     #[serde(default)] pub jar: Vec<toml::Value>,
-    #[serde(default)] pub capabilities: Vec<String>,
     #[serde(default)] pub native: Option<Native>,
     #[serde(default)] pub wasm: Option<Wasm>,
     #[serde(default)] pub inject: Vec<Inject>,
-    #[serde(default)] pub dependencies: BTreeMap<String, toml::Value>,
     #[serde(default)] pub properties: BTreeMap<String, toml::Value>,
     #[serde(default)] pub wasm_memory_mib: Option<u32>,
 }
@@ -101,6 +101,12 @@ impl HmodManifest {
         if !valid_hmod_id(&self.id) { return bad("id must be [a-z0-9_], 1 to 64 characters"); }
         semver::Version::parse(&self.version).map_err(|e| Error::Manifest(format!("version: {e}")))?;
         if self.api.trim().is_empty() { return bad("api must not be empty"); }
+        if self.name.trim().is_empty() || self.description.trim().is_empty() || self.license.trim().is_empty() {
+            return bad("name, description and license are required");
+        }
+        if !matches!(self.side.as_str(), "client" | "server" | "both") {
+            return bad("side must be client, server or both");
+        }
         if self.native.is_some() && self.wasm.is_some() { return bad("a mod is [native] or [wasm], never both"); }
         if let Some(m) = self.wasm_memory_mib && !(1..=4096).contains(&m) {
             return bad("wasm_memory_mib must be 1 to 4096");
@@ -218,7 +224,6 @@ mod tests {
         format!("id = \"demo\"\nname = \"Demo\"\nversion = \"1.2.3\"\ndescription = \"Demo mod\"\nauthors = [\"Test\"]\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {{}}\n{extra}\n[native]\ngame = \"26.3\"\nhorizon = \"{}\"\nmixins = \"{}\"\n",
             "a".repeat(40), "b".repeat(40))
     }
-
     #[test] fn native_mod_with_mixin_rows() {
         let t = native_toml("") + "[[native.mixin]]\nid = \"m1\"\ntarget = \"x::y\"\nkind = \"HEAD\"\n[[native.loop]]\nid = \"l1\"\n";
         let m = HmodManifest::parse(&t).unwrap();
