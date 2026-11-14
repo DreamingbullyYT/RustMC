@@ -54,7 +54,7 @@ for name, line in rows:
     if not path.is_file() or path.stat().st_size == 0:
         raise SystemExit(f"Required SDK asset is missing or empty: {name}")
     selected.append(line)
-filtered.write_text("\\n".join(selected) + "\\n")
+filtered.write_text("\n".join(selected) + "\n")
 PY
 
   raw="$temp/key.raw"; der="$temp/key.der"; pem="$temp/key.pem"; message="$temp/message"; signature="$temp/signature"
