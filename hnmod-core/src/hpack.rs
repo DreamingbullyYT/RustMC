@@ -153,6 +153,176 @@ pub fn inspect<R: Read + Seek>(reader: R) -> Result<HpackReport, String> {
     })
 }
 
+
+#[derive(Clone, Debug, Deserialize)]
+struct RegistryIndex {
+    schema: u32,
+    #[serde(default)] projects: Vec<RegistryProject>,
+    #[serde(default)] revoked: Vec<Revoked>,
+}
+#[derive(Clone, Debug, Deserialize)]
+struct RegistryProject {
+    id: String,
+    kind: String,
+    source: String,
+    #[serde(default)] key: Option<String>,
+    versions: Vec<RegistryVersion>,
+}
+#[derive(Clone, Debug, Deserialize)]
+struct RegistryVersion {
+    version: String,
+    game: String,
+    file: RegistryFile,
+}
+#[derive(Clone, Debug, Deserialize)]
+struct RegistryFile {
+    name: String,
+    url: String,
+    size: u64,
+    sha256: String,
+    #[serde(default)] signature: Option<String>,
+}
+#[derive(Clone, Debug, Deserialize)]
+struct Revoked {
+    id: String,
+    #[serde(default)] sha256: Option<String>,
+    reason: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ResolvedPackMod {
+    pub id: String,
+    pub version: String,
+    pub file_name: String,
+    pub url: String,
+    pub size: u64,
+    pub sha256: String,
+    pub public_key: Option<String>,
+    pub signature: Option<String>,
+    pub on: bool,
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct HpackInstallPlan {
+    pub profile_id: String,
+    pub profile_name: String,
+    pub profile_version: String,
+    pub game: String,
+    pub mods: Vec<ResolvedPackMod>,
+    pub overrides: Vec<String>,
+    pub override_bytes: u64,
+    pub content_fingerprint_sha256: String,
+}
+
+fn github_repo(url: &str) -> Option<String> {
+    let rest = url.strip_prefix("https://github.com/")?;
+    let mut parts = rest.split('/');
+    let owner = parts.next()?;
+    let repo = parts.next()?;
+    if owner.is_empty() || repo.is_empty() || owner.contains(['?', '#', '\\\\']) || repo.contains(['?', '#', '\\\\']) {
+        return None;
+    }
+    Some(format!("{owner}/{repo}"))
+}
+
+fn trusted_download(url: &str, file_name: &str, source: &str) -> bool {
+    if !url.starts_with("https://github.com/") || url.contains(['?', '#', '\\\\']) {
+        return false;
+    }
+    let Some(rest) = url.strip_prefix("https://github.com/") else { return false };
+    let parts: Vec<_> = rest.split('/').collect();
+    if parts.len() < 7 || parts[2] != "releases" || parts[3] != "download" || parts[4].is_empty() {
+        return false;
+    }
+    let repository = format!("{}/{}", parts[0], parts[1]);
+    let official = repository == "horizon-rust/horizon-mods";
+    let source_repo = github_repo(source).as_deref() == Some(repository.as_str());
+    official || source_repo
+        && parts.last().copied() == Some(file_name)
+}
+
+fn parse_registry(index_json: &str) -> Result<RegistryIndex, String> {
+    let index: RegistryIndex = serde_json::from_str(index_json)
+        .map_err(|e| format!("invalid Horizon registry index: {e}"))?;
+    if index.schema != 1 {
+        return Err(format!("unsupported Horizon registry schema {}; expected 1", index.schema));
+    }
+    let mut ids = BTreeSet::new();
+    for project in &index.projects {
+        if !valid_id(&project.id) || !ids.insert(project.id.as_str()) {
+            return Err(format!("registry has an invalid or duplicate project id: {}", project.id));
+        }
+    }
+    Ok(index)
+}
+
+/// Resolve a local .hpack's exact mod pins against a trusted registry index snapshot.
+/// This produces download instructions only; bytes still require SHA-256 and minisign verification.
+pub fn resolve(path: &std::path::Path, index_json: &str) -> Result<HpackInstallPlan, String> {
+    let report = inspect(std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?)?;
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(path).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    let mut manifest_text = String::new();
+    zip.by_name(MANIFEST).map_err(|_| format!("missing {MANIFEST}"))?
+        .take(1 << 20).read_to_string(&mut manifest_text).map_err(|e| e.to_string())?;
+    let manifest: Manifest = toml::from_str(&manifest_text).map_err(|e| e.to_string())?;
+    let index = parse_registry(index_json)?;
+    let mut resolved = Vec::with_capacity(manifest.mods.len());
+    for pin in manifest.mods {
+        let project = index.projects.iter().find(|project| project.id == pin.id)
+            .ok_or_else(|| format!("{} is not present in the Horizon registry index", pin.id))?;
+        if project.kind != "mod" && project.kind != "native-mod" {
+            return Err(format!("{} is a {}, not an installable .hmod", pin.id, project.kind));
+        }
+        let version = project.versions.iter().find(|version| version.version == pin.version)
+            .ok_or_else(|| format!("{} {} is not published in the registry index", pin.id, pin.version))?;
+        if version.game != manifest.game {
+            return Err(format!("{} {} targets game {}, but this pack targets {}", pin.id, pin.version, version.game, manifest.game));
+        }
+        let file = &version.file;
+        if file.sha256 != pin.sha256 {
+            return Err(format!("{} {} SHA-256 differs from the .hpack pin", pin.id, pin.version));
+        }
+        if file.size == 0 || file.size > 64 * 1024 * 1024
+            || file.sha256.len() != 64
+            || !file.sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            || !file.name.ends_with(".hmod")
+            || file.name.contains(['/', '\\\\', ':'])
+            || !trusted_download(&file.url, &file.name, &project.source)
+        {
+            return Err(format!("{} {} has an unsafe or invalid registry download record", pin.id, pin.version));
+        }
+        if let Some(revoked) = index.revoked.iter().find(|revoked| {
+            revoked.id == pin.id && revoked.sha256.as_ref().is_none_or(|hash| hash == &pin.sha256)
+        }) {
+            return Err(format!("{} {} was revoked: {}", pin.id, pin.version, revoked.reason));
+        }
+        if project.key.is_some() && file.signature.as_deref().is_none_or(str::is_empty) {
+            return Err(format!("{} {} is missing its required minisign signature", pin.id, pin.version));
+        }
+        resolved.push(ResolvedPackMod {
+            id: pin.id,
+            version: pin.version,
+            file_name: file.name.clone(),
+            url: file.url.clone(),
+            size: file.size,
+            sha256: file.sha256.clone(),
+            public_key: project.key.clone(),
+            signature: file.signature.clone(),
+            on: pin.on,
+        });
+    }
+    Ok(HpackInstallPlan {
+        profile_id: manifest.id,
+        profile_name: manifest.name,
+        profile_version: manifest.version,
+        game: manifest.game,
+        mods: resolved,
+        overrides: report.overrides,
+        override_bytes: report.override_bytes,
+        content_fingerprint_sha256: report.content_fingerprint_sha256,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
