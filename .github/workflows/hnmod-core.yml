@@ -309,7 +309,10 @@ jobs:
               receipt = json.loads(receipt_path.read_text())
               receipt["overrides"]["unowned.txt"] = hashlib.sha256(b"keep me").hexdigest()
               receipt_path.write_text(json.dumps(receipt))
-              # A later pack revision removes old pack-owned mods and unchanged overrides transactionally.
+              # A user-modified pack-owned mod is preserved rather than silently deleted.
+              mod_file = profile / "horizon-mods/demo.hmod"
+              mod_file.write_bytes(b"user changed this mod")
+              # A later pack revision removes only unchanged pack-owned files transactionally.
               plan2 = dict(plan, profile_version="1.1.0", overrides=[], mods=[], content_fingerprint_sha256="b" * 64)
               cli.write_text(
                   "#!/usr/bin/env python3\nimport json,sys\n"
@@ -322,7 +325,7 @@ jobs:
               args.pack = pack2
               result2 = installer["install"](args)
               assert result2["mods_installed"] == 0
-              assert not (profile / "horizon-mods/demo.hmod").exists()
+              assert mod_file.read_bytes() == b"user changed this mod"
               assert not (profile / "options.txt").exists()
               assert unowned.read_text() == "keep me"
               assert (profile / "horizon-mods.txt").read_text() == ""
