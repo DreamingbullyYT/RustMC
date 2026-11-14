@@ -3,9 +3,10 @@ name: Android build
 # Builds the Horizon Android APK (Rust JNI core + NativeActivity game runtime + Compose launcher)
 # exactly like ANDROID_BUILD.md describes, then uploads the APK as a workflow artifact.
 #
-#  * every push / pull request  -> debug APK artifact
-#  * manual run (Actions tab)   -> choose debug or release
-#  * tag like v0.2.0            -> GitHub Release with the APK attached
+#  * pull requests / feature-branch pushes -> Kotlin/Compose compile only (no APK)
+#  * main-branch pushes                     -> debug APK artifact
+#  * manual run (Actions tab)               -> choose debug or release
+#  * tag like v0.2.0                        -> GitHub Release with the APK attached
 #
 # Optional repository secrets for a signed release APK (otherwise the release build is skipped
 # and only the debug-signed APK is published):
