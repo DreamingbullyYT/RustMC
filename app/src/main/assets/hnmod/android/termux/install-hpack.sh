@@ -24,7 +24,13 @@ done
 [ -f "$INDEX" ] || { echo "registry index not found: $INDEX" >&2; exit 1; }
 
 export CARGO_INCREMENTAL=0
-cargo build --locked --manifest-path "$REPO/hnmod-core/Cargo.toml" --bin hnmod
+export CARGO_BUILD_JOBS="${HORIZON_CARGO_JOBS:-3}"
+if ! cargo build --locked --manifest-path "$REPO/hnmod-core/Cargo.toml" --bin hnmod; then
+  echo "Cargo registry failed; retrying the Hpack resolver build through RsProxy" >&2
+  cargo --config 'source.crates-io.replace-with="horizon-rsproxy-sparse"' \
+    --config 'source.horizon-rsproxy-sparse.registry="sparse+https://rsproxy.cn/index/"' \
+    build --locked --manifest-path "$REPO/hnmod-core/Cargo.toml" --bin hnmod
+fi
 CLI="$REPO/hnmod-core/target/debug/hnmod"
 [ -x "$CLI" ] || { echo "HNMod resolver CLI was not built" >&2; exit 1; }
 python3 "$REPO/android/termux/install-hpack.py" \
