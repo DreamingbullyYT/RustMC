@@ -167,6 +167,9 @@ pub fn resolve(
     let mut declared = Vec::with_capacity(bundles.len());
     for bundle in bundles {
         let manifest = &bundle.manifest;
+        if !matches!(manifest.side.as_str(), "client" | "both") {
+            return Err(compatibility(format!("{} is not available on the Android client (side={})", manifest.id, manifest.side)));
+        }
         let native = manifest.native.as_ref()
             .ok_or_else(|| compatibility(format!("{} is content/WASM, not a native HMOD", manifest.id)))?;
         if !ids.insert(manifest.id.clone()) {
@@ -240,8 +243,13 @@ mod tests {
     use zip::{write::SimpleFileOptions, ZipWriter};
 
     fn archive(id: &str, version: &str, horizon: &str, mixins: &str, dependencies: &str) -> Hmod {
+        let dependency_table = if dependencies.is_empty() {
+            "dependencies = {}\n".to_owned()
+        } else {
+            format!("{dependencies}\n")
+        };
         let manifest = format!(
-            "id = \"{id}\"\nversion = \"{version}\"\napi = \"0.2\"\n[native]\ngame = \"26.3\"\nhorizon = \"{horizon}\"\nmixins = \"{mixins}\"\n{dependencies}"
+            "id = \\"{id}\\"\nname = \\"{id}\\"\nversion = \\"{version}\\"\ndescription = \\"native test mod\\"\nauthors = []\nlicense = \\"MIT\\"\ncredits = \\"\\"\napi = \\"0.2\\"\nside = \\"client\\"\ncapabilities = []\nnamespaces = []\n{dependency_table}[native]\ngame = \\"26.3\\"\nhorizon = \\"{horizon}\\"\nmixins = \\"{mixins}\\"\n"
         );
         let cargo = "[package]\nname = \"test-mod\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[dependencies]\nhorizon-mod-api = { path = \".horizon/sdk/api/crates/horizon-mod-api\" }\n";
         let mut out = Cursor::new(Vec::new());
