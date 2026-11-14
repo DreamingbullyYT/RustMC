@@ -110,7 +110,7 @@ def tree_hashes(root: Path) -> dict[str, str]:
     return result
 
 
-def validate_cached(final: Path, release_dir: Path, index: dict) -> bool:
+def validate_cached(final: Path, release_dir: Path, index: dict, target: str) -> bool:
     try:
         if (final / "sdk.json").read_bytes() != (release_dir / "sdk.json").read_bytes():
             return False
@@ -120,7 +120,15 @@ def validate_cached(final: Path, release_dir: Path, index: dict) -> bool:
                 return False
         manifest = json.loads((final / ".install-manifest.json").read_text(encoding="utf-8"))
         slices = final / "slices"
-        return manifest.get("files") == tree_hashes(slices)
+        return (
+            manifest.get("files") == tree_hashes(slices)
+            and manifest.get("signature_verified") is True
+            and manifest.get("tag") == f"sdk-{index['build']['commit']}"
+            and manifest.get("index_sha256") == sha256(final / "sdk.json")
+            and manifest.get("target") == target
+            and manifest.get("game_commit") == index["build"]["commit"]
+            and manifest.get("mixins_rev") == index["mixins"]["rev"]
+        )
     except (OSError, ValueError, KeyError, TypeError):
         return False
 
@@ -235,7 +243,7 @@ def install(release_dir: Path, cache_root: Path, commit: str, target: str, verif
     lock_path = cache_root / ".install.lock"
     with lock_path.open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        if (final / "sdk.json").is_file() and validate_cached(final, release_dir, index):
+        if (final / "sdk.json").is_file() and validate_cached(final, release_dir, index, target):
             return final
         staging = Path(tempfile.mkdtemp(prefix=".sdk-staging-", dir=cache_root))
         backup = cache_root / f".{final.name}.previous"
@@ -251,7 +259,15 @@ def install(release_dir: Path, cache_root: Path, commit: str, target: str, verif
                 folder = name[:-len(".tar.xz")]
                 safe_extract(staging / name, extracted / folder)
             (staging / ".install-manifest.json").write_text(
-                json.dumps({"files": tree_hashes(extracted)}, sort_keys=True), encoding="utf-8"
+                json.dumps({
+                    "files": tree_hashes(extracted),
+                    "signature_verified": True,
+                    "tag": f"sdk-{commit}",
+                    "index_sha256": sha256(staging / "sdk.json"),
+                    "target": target,
+                    "game_commit": commit,
+                    "mixins_rev": index["mixins"]["rev"],
+                }, sort_keys=True), encoding="utf-8"
             )
             if backup.exists():
                 shutil.rmtree(backup)
