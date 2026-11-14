@@ -118,7 +118,7 @@ pub fn resolve(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{hmod::{read_hmod, HMOD_MANIFEST}, sdk::{Asset, Build, Mixins, SdkIndex, Toolchain}};
+    use crate::{hmod::{read_hmod, HMOD_MANIFEST}, sdk::{Asset, Build, Mixins, SdkIndex, Surface, Toolchain}};
     use std::io::{Cursor, Write};
     use zip::{write::SimpleFileOptions, ZipWriter};
 
@@ -145,7 +145,9 @@ mod tests {
     fn sdk() -> VerifiedIdentity {
         let mut assets = BTreeMap::new();
         for name in ["surface.json", "build-data.tar.xz", "api-source.tar.xz"] {
-            assets.insert(name.into(), Asset { sha256: "a".repeat(64), size: 1, kind: "test".into(), codec: "xz".into(), target: None, side: None });
+            let kind = if name == "surface.json" { "surface" } else if name == "build-data.tar.xz" { "build-data" } else { "api-source" };
+            let codec = if name == "surface.json" { "none" } else { "xz" };
+            assets.insert(name.into(), Asset { sha256: "a".repeat(64), size: 1, kind: kind.into(), codec: codec.into(), target: None, side: None });
         }
         for kind in ["runtime", "api", "engine"] {
             let name = format!("{kind}-aarch64-linux-android.tar.xz");
@@ -154,8 +156,12 @@ mod tests {
         VerifiedIdentity {
             index: SdkIndex {
                 schema: 1,
-                build: Build { commit: "a".repeat(40), game: "26.3".into() },
+                build: Build { commit: "a".repeat(40), game: "26.3".into(), date: "2026-11-14".into(), nightly: None },
+                package_format: 1,
                 toolchain: Toolchain { rust: "1.95.0".into() },
+                content_api: "0.2".into(),
+                surface: Surface { hash: "e".repeat(64), previous: None, changes: vec![] },
+                inputs: serde_json::json!({}),
                 mixins: Mixins { rev: "b".repeat(40), patch: "c".repeat(64) },
                 assets,
             },
