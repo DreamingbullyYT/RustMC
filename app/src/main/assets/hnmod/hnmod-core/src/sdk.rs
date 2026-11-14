@@ -59,6 +59,16 @@ pub struct Asset {
     pub side: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+struct InstallReceipt {
+    signature_verified: bool,
+    tag: String,
+    index_sha256: String,
+    target: String,
+    game_commit: String,
+    mixins_rev: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct VerifiedIdentity {
     pub index: SdkIndex,
@@ -66,15 +76,31 @@ pub struct VerifiedIdentity {
 }
 
 impl VerifiedIdentity {
-    /// Read an SDK index and calculate its content identity. This is not a signature check.
-    pub fn read(path: &Path) -> Result<Self, String> {
-        let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    /// Read an SDK directory only after the Android installer has verified its signed release.
+    /// The receipt is written after Ed25519 verification and all asset checks pass.
+    pub fn read(directory: &Path) -> Result<Self, String> {
+        if !directory.is_dir() {
+            return Err(format!("{} is not an installed SDK directory", directory.display()));
+        }
+        let index_path = directory.join("sdk.json");
+        let bytes = std::fs::read(&index_path).map_err(|e| format!("{}: {e}", index_path.display()))?;
         let index: SdkIndex = serde_json::from_slice(&bytes)
-            .map_err(|e| format!("{}: invalid sdk.json: {e}", path.display()))?;
-        let identity = Self {
-            index,
-            index_sha256: format!("{:x}", Sha256::digest(&bytes)),
-        };
+            .map_err(|e| format!("{}: invalid sdk.json: {e}", index_path.display()))?;
+        let index_sha256 = format!("{:x}", Sha256::digest(&bytes));
+        let receipt_path = directory.join(".install-manifest.json");
+        let receipt: InstallReceipt = serde_json::from_slice(
+            &std::fs::read(&receipt_path).map_err(|e| format!("{}: {e}", receipt_path.display()))?
+        ).map_err(|e| format!("{}: invalid install receipt: {e}", receipt_path.display()))?;
+        if !receipt.signature_verified
+            || receipt.tag != format!("sdk-{}", index.build.commit)
+            || receipt.index_sha256 != index_sha256
+            || receipt.game_commit != index.build.commit
+            || receipt.mixins_rev != index.mixins.rev
+            || receipt.target != "aarch64-linux-android"
+        {
+            return Err("SDK install receipt is missing, unsigned or does not match sdk.json".into());
+        }
+        let identity = Self { index, index_sha256 };
         identity.validate()?;
         Ok(identity)
     }
@@ -168,7 +194,7 @@ mod tests {
         }
         json!({
             "schema":1,
-            "build":{"commit":"a".repeat(40),"game":"26.3"},
+            "build":{"commit":"a".repeat(40),"game":"26.3","date":"2026-11-14"},
             "package_format":1,
             "toolchain":{"rust":"1.95.0"},
             "content_api":"0.2",
@@ -180,6 +206,35 @@ mod tests {
     }
 
     #[test]
+
+    #[test]
+    fn reads_only_an_installed_sdk_with_a_matching_signature_receipt() {
+        let temp = std::env::temp_dir().join(format!("hnmod-sdk-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(&temp).unwrap();
+        let value = index("aarch64-linux-android");
+        let bytes = serde_json::to_vec(&value).unwrap();
+        std::fs::write(temp.join("sdk.json"), &bytes).unwrap();
+        let parsed: SdkIndex = serde_json::from_slice(&bytes).unwrap();
+        let digest = format!("{:x}", Sha256::digest(&bytes));
+        let receipt = serde_json::json!({
+            "files": {},
+            "signature_verified": true,
+            "tag": format!("sdk-{}", parsed.build.commit),
+            "index_sha256": digest,
+            "target": "aarch64-linux-android",
+            "game_commit": parsed.build.commit,
+            "mixins_rev": parsed.mixins.rev
+        });
+        std::fs::write(temp.join(".install-manifest.json"), serde_json::to_vec(&receipt).unwrap()).unwrap();
+        assert!(VerifiedIdentity::read(&temp).is_ok());
+        let mut bad = receipt;
+        bad["signature_verified"] = serde_json::Value::Bool(false);
+        std::fs::write(temp.join(".install-manifest.json"), serde_json::to_vec(&bad).unwrap()).unwrap();
+        assert!(VerifiedIdentity::read(&temp).unwrap_err().contains("unsigned"));
+        std::fs::remove_dir_all(temp).unwrap();
+    }
+
     fn reads_sdk_index_and_checks_android_slices_and_pins() {
         let value = index("aarch64-linux-android");
         let parsed: SdkIndex = serde_json::from_value(value).unwrap();
