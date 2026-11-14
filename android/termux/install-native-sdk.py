@@ -90,6 +90,41 @@ def verify_signature(release_dir: Path, commit: str, verifier: Path) -> None:
     subprocess.run(command, check=True)
 
 
+def parse_sums(path: Path) -> set[str]:
+    names = set()
+    for line in path.read_text(encoding="ascii").splitlines():
+        match = re.fullmatch(r"[0-9a-f]{64}  ([A-Za-z0-9._-]+)", line)
+        if not match or match.group(1) in names:
+            fail(f"invalid or duplicate SHA256SUMS row: {line!r}")
+        names.add(match.group(1))
+    return names
+
+
+def tree_hashes(root: Path) -> dict[str, str]:
+    result = {}
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            fail(f"symlink found in installed SDK cache: {path}")
+        if path.is_file():
+            result[path.relative_to(root).as_posix()] = sha256(path)
+    return result
+
+
+def validate_cached(final: Path, release_dir: Path, index: dict) -> bool:
+    try:
+        if (final / "sdk.json").read_bytes() != (release_dir / "sdk.json").read_bytes():
+            return False
+        for name, asset in index["assets"].items():
+            cached = final / name
+            if not cached.is_file() or cached.stat().st_size != asset["size"] or sha256(cached) != asset["sha256"]:
+                return False
+        manifest = json.loads((final / ".install-manifest.json").read_text(encoding="utf-8"))
+        slices = final / "slices"
+        return manifest.get("files") == tree_hashes(slices)
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
 def validate_index(release_dir: Path, commit: str, target: str) -> dict:
     index_path = release_dir / "sdk.json"
     index = json.loads(index_path.read_text(encoding="utf-8"))
@@ -100,6 +135,12 @@ def validate_index(release_dir: Path, commit: str, target: str) -> dict:
         fail("SDK index game commit does not match the requested release")
     if not build.get("game") or not (index.get("toolchain") or {}).get("rust"):
         fail("SDK index is missing game or Rust toolchain identity")
+    if not isinstance(index.get("package_format"), int) or index["package_format"] < 1:
+        fail("SDK index has an unsupported package format")
+    if not isinstance(index.get("content_api"), str) or not index["content_api"]:
+        fail("SDK index is missing content API identity")
+    if not isinstance((index.get("surface") or {}).get("hash"), str):
+        fail("SDK index is missing surface identity")
     mixins = index.get("mixins") or {}
     if not re.fullmatch(r"[0-9a-f]{40}", mixins.get("rev", "")):
         fail("SDK index has an invalid mixins revision")
@@ -127,6 +168,15 @@ def validate_index(release_dir: Path, commit: str, target: str) -> dict:
     for name, asset in assets.items():
         if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
             fail(f"unsafe SDK asset name: {name!r}")
+        if not isinstance(asset, dict) or not re.fullmatch(r"[0-9a-f]{64}", asset.get("sha256", "")) or not isinstance(asset.get("size"), int) or asset["size"] <= 0:
+            fail(f"invalid SDK asset checksum or size: {name}")
+        if name not in STATIC and name not in ("build-data.tar.xz", "api-source.tar.xz"):
+            parsed = re.fullmatch(r"(runtime|api|engine)-([a-z0-9_-]+)(-server)?\\.tar\\.xz", name)
+            if not parsed:
+                fail(f"unknown SDK asset name: {name}")
+            expected_side = "server" if parsed.group(3) else "client"
+            if asset.get("kind") != parsed.group(1) or asset.get("target") != parsed.group(2) or asset.get("side") != expected_side or asset.get("codec") != "xz":
+                fail(f"SDK asset metadata does not match its name: {name}")
         path = release_dir / name
         if not path.is_file():
             fail(f"signed SDK asset is missing: {name}")
@@ -136,6 +186,10 @@ def validate_index(release_dir: Path, commit: str, target: str) -> dict:
             fail(f"SDK asset SHA-256 mismatch: {name}")
     if not expected.issubset(assets):
         fail("SDK index is missing required asset metadata")
+    listed = parse_sums(release_dir / "SHA256SUMS")
+    required_sums = {"sdk.json"} | set(assets)
+    if listed != required_sums:
+        fail("SHA256SUMS does not list exactly sdk.json and the indexed SDK assets")
     return index
 
 
@@ -181,13 +235,8 @@ def install(release_dir: Path, cache_root: Path, commit: str, target: str, verif
     lock_path = cache_root / ".install.lock"
     with lock_path.open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        if (final / "sdk.json").is_file():
-            try:
-                existing = json.loads((final / "sdk.json").read_text())
-                if existing.get("build", {}).get("commit") == commit and existing.get("build", {}).get("commit") == index["build"]["commit"]:
-                    return final
-            except (OSError, ValueError):
-                pass
+        if (final / "sdk.json").is_file() and validate_cached(final, release_dir, index):
+            return final
         staging = Path(tempfile.mkdtemp(prefix=".sdk-staging-", dir=cache_root))
         backup = cache_root / f".{final.name}.previous"
         try:
@@ -201,6 +250,9 @@ def install(release_dir: Path, cache_root: Path, commit: str, target: str, verif
                     continue
                 folder = name[:-len(".tar.xz")]
                 safe_extract(staging / name, extracted / folder)
+            (staging / ".install-manifest.json").write_text(
+                json.dumps({"files": tree_hashes(extracted)}, sort_keys=True), encoding="utf-8"
+            )
             if backup.exists():
                 shutil.rmtree(backup)
             if final.exists():
