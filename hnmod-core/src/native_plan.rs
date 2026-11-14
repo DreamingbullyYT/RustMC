@@ -167,6 +167,9 @@ pub fn resolve(
     let mut declared = Vec::with_capacity(bundles.len());
     for bundle in bundles {
         let manifest = &bundle.manifest;
+        if !matches!(manifest.side.as_str(), "client" | "both") {
+            return Err(compatibility(format!("{} is not available on the Android client (side={})", manifest.id, manifest.side)));
+        }
         let native = manifest.native.as_ref()
             .ok_or_else(|| compatibility(format!("{} is content/WASM, not a native HMOD", manifest.id)))?;
         if !ids.insert(manifest.id.clone()) {
