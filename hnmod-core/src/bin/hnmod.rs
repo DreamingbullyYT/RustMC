@@ -191,7 +191,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("  hnmod inspect FILE.hmod|FILE.hnmod");
             eprintln!("  hnmod resolve-hmods TARGET PROFILE SDK.json MOD.hmod...");
             eprintln!("  hnmod inspect-sdk SDK.json TARGET");
-            eprintln!("  hnmod inspect-hpack FILE.hpack");\n            eprintln!("  hnmod resolve-hpack FILE.hpack INDEX.json");
+            eprintln!("  hnmod inspect-hpack FILE.hpack");
+            eprintln!("  hnmod resolve-hpack FILE.hpack INDEX.json");
             eprintln!("  hnmod inspect-pack FILE.mrpack");
             eprintln!("  hnmod extract FILE.hnmod NEW_DIRECTORY");
             eprintln!("  hnmod prepare MODS_DIRECTORY PLAN.json");
