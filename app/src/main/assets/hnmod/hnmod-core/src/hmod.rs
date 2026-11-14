@@ -243,8 +243,20 @@ mod tests {
     }
     #[test] fn native_package_requires_crate_and_helper_sources() {
         let mut manifest = native_toml("");
-        manifest.push_str("\\n[[native.mixin]]\\nid = \\"entry\\"\\ntarget = \\"horizon_client::game::Game::tick\\"\\nkind = \\"HEAD\\"\\nhelper = \\"src/mixins/entry.rs\\"\\n");
-        let cargo = b"[package]\\nname = \\"demo\\"\\nversion = \\"1.0.0\\"\\nedition = \\"2024\\"\\n";
+        manifest.push_str(
+            r#"
+[[native.mixin]]
+id = "entry"
+target = "horizon_client::game::Game::tick"
+kind = "HEAD"
+helper = "src/mixins/entry.rs"
+"#,
+        );
+        let cargo = br#"[package]
+name = "demo"
+version = "1.0.0"
+edition = "2024"
+"#;
         let ok = zip_of(&[
             (HMOD_MANIFEST, manifest.as_bytes()), ("Cargo.toml", cargo),
             ("src/lib.rs", b"//"), ("src/mixins/entry.rs", b"fn entry() {}"),
