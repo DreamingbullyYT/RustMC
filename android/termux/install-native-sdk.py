@@ -23,6 +23,7 @@ from pathlib import Path, PurePosixPath
 
 REPOSITORY = "arismoko/horizon"
 TARGET = "aarch64-linux-android"
+MAX_RELEASE_ASSET_BYTES = 8 * 1024 * 1024 * 1024
 STATIC = {
     "surface.json": ("surface", "none"),
     "build-data.tar.xz": ("build-data", "xz"),
@@ -79,9 +80,22 @@ def download_release(commit: str, target: str, destination: Path) -> None:
         url = by_name[name].get("browser_download_url")
         if not url:
             fail(f"SDK release asset has no download URL: {name}")
+        expected_size = by_name[name].get("size")
+        if not isinstance(expected_size, int) or expected_size <= 0 or expected_size > MAX_RELEASE_ASSET_BYTES:
+            fail(f"SDK release asset has an invalid or excessive size: {name}")
         request = urllib.request.Request(url, headers={"User-Agent": "rustMC-Android-Native-SDK/1"})
+        received = 0
         with urllib.request.urlopen(request, timeout=180) as response, (destination / name).open("wb") as output:
-            shutil.copyfileobj(response, output)
+            while True:
+                block = response.read(128 * 1024)
+                if not block:
+                    break
+                received += len(block)
+                if received > expected_size:
+                    fail(f"SDK release asset exceeded its published size: {name}")
+                output.write(block)
+        if received != expected_size:
+            fail(f"SDK release asset download was truncated: {name}")
 
 
 def verify_signature(release_dir: Path, commit: str, target: str, verifier: Path) -> None:
