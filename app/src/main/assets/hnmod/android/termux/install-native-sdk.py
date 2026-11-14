@@ -53,39 +53,43 @@ def request_json(url: str):
         return json.load(response)
 
 
-def download_release(commit: str, destination: Path) -> None:
+def required_assets(target: str) -> set[str]:
+    return {
+        "sdk.json", "surface.json", "build-data.tar.xz", "api-source.tar.xz",
+        *(f"{kind}-{target}.tar.xz" for kind in KINDS),
+    }
+
+
+def download_release(commit: str, target: str, destination: Path) -> None:
     tag = f"sdk-{commit}"
     release = request_json(f"https://api.github.com/repos/{REPOSITORY}/releases/tags/{tag}")
     if release.get("tag_name") != tag or release.get("draft") or release.get("prerelease") is not True:
         fail(f"{tag} is not a published native SDK release")
     assets = release.get("assets", [])
-    names = [asset.get("name") for asset in assets]
-    if len(names) != len(set(names)):
+    by_name = {asset.get("name"): asset for asset in assets}
+    if len(by_name) != len(assets):
         fail("GitHub SDK release contains duplicate asset names")
-    for asset in assets:
-        name = asset.get("name", "")
+    required = required_assets(target) | {"SHA256SUMS", "SHA256SUMS.sig"}
+    missing = required - set(by_name)
+    if missing:
+        fail(f"{tag} is missing Android SDK assets: {', '.join(sorted(missing))}")
+    for name in required:
         if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
             fail(f"unsafe SDK release asset name: {name!r}")
-        if name not in {"sdk.json", "SHA256SUMS", "SHA256SUMS.sig"} and not name.endswith((".tar.xz", ".json")):
-            fail(f"unexpected SDK release asset: {name}")
-        url = asset.get("browser_download_url")
+        url = by_name[name].get("browser_download_url")
         if not url:
             fail(f"SDK release asset has no download URL: {name}")
         request = urllib.request.Request(url, headers={"User-Agent": "rustMC-Android-Native-SDK/1"})
-        target = destination / name
-        with urllib.request.urlopen(request, timeout=180) as response, target.open("wb") as output:
+        with urllib.request.urlopen(request, timeout=180) as response, (destination / name).open("wb") as output:
             shutil.copyfileobj(response, output)
-    required = {"sdk.json", "SHA256SUMS", "SHA256SUMS.sig"}
-    missing = required - set(names)
-    if missing:
-        fail(f"{tag} is missing release metadata: {', '.join(sorted(missing))}")
 
 
-def verify_signature(release_dir: Path, commit: str, verifier: Path) -> None:
+def verify_signature(release_dir: Path, commit: str, target: str, verifier: Path) -> None:
+    required = sorted(required_assets(target))
     command = [
         "bash", "-c",
-        'source "$1"; horizon_sdk_verify_release "$2" "$3"',
-        "_", str(verifier), str(release_dir), commit,
+        'source "$1"; shift; horizon_sdk_verify_release "$@"',
+        "_", str(verifier), str(release_dir), commit, *required,
     ]
     subprocess.run(command, check=True)
 
@@ -114,7 +118,8 @@ def validate_cached(final: Path, release_dir: Path, index: dict, target: str) ->
     try:
         if (final / "sdk.json").read_bytes() != (release_dir / "sdk.json").read_bytes():
             return False
-        for name, asset in index["assets"].items():
+        for name in required_assets(target) - {"sdk.json"}:
+            asset = index["assets"][name]
             cached = final / name
             if not cached.is_file() or cached.stat().st_size != asset["size"] or sha256(cached) != asset["sha256"]:
                 return False
@@ -185,13 +190,14 @@ def validate_index(release_dir: Path, commit: str, target: str) -> dict:
             expected_side = "server" if parsed.group(3) else "client"
             if asset.get("kind") != parsed.group(1) or asset.get("target") != parsed.group(2) or asset.get("side") != expected_side or asset.get("codec") != "xz":
                 fail(f"SDK asset metadata does not match its name: {name}")
-        path = release_dir / name
-        if not path.is_file():
-            fail(f"signed SDK asset is missing: {name}")
-        if path.stat().st_size != asset.get("size"):
-            fail(f"SDK asset size mismatch: {name}")
-        if sha256(path) != asset.get("sha256"):
-            fail(f"SDK asset SHA-256 mismatch: {name}")
+        if name in required_assets(target) - {"sdk.json"}:
+            path = release_dir / name
+            if not path.is_file():
+                fail(f"signed SDK asset is missing: {name}")
+            if path.stat().st_size != asset.get("size"):
+                fail(f"SDK asset size mismatch: {name}")
+            if sha256(path) != asset.get("sha256"):
+                fail(f"SDK asset SHA-256 mismatch: {name}")
     if not expected.issubset(assets):
         fail("SDK index is missing required asset metadata")
     listed = parse_sums(release_dir / "SHA256SUMS")
@@ -240,7 +246,7 @@ def safe_extract(archive: Path, destination: Path) -> None:
 
 
 def install(release_dir: Path, cache_root: Path, commit: str, target: str, verifier: Path) -> Path:
-    verify_signature(release_dir, commit, verifier)
+    verify_signature(release_dir, commit, target, verifier)
     index = validate_index(release_dir, commit, target)
     cache_root.mkdir(parents=True, exist_ok=True)
     final = cache_root / f"{commit}-{target}"
@@ -254,10 +260,11 @@ def install(release_dir: Path, cache_root: Path, commit: str, target: str, verif
         try:
             for name in ("sdk.json", "SHA256SUMS", "SHA256SUMS.sig"):
                 shutil.copy2(release_dir / name, staging / name)
-            for name in index["assets"]:
+            selected_assets = required_assets(target) - {"sdk.json"}
+            for name in selected_assets:
                 shutil.copy2(release_dir / name, staging / name)
             extracted = staging / "slices"
-            for name in index["assets"]:
+            for name in selected_assets:
                 if not name.endswith(".tar.xz"):
                     continue
                 folder = name[:-len(".tar.xz")]
@@ -306,7 +313,7 @@ def main() -> int:
     else:
         with tempfile.TemporaryDirectory(prefix="horizon-sdk-download-") as temporary:
             release_dir = Path(temporary)
-            download_release(args.commit, release_dir)
+            download_release(args.commit, args.target, release_dir)
             install(release_dir, args.cache_dir, args.commit, args.target, args.verifier)
     print(args.cache_dir / f"{args.commit}-{args.target}")
     return 0
