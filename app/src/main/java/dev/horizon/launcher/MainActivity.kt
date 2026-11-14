@@ -99,6 +99,9 @@ class MainActivity : ComponentActivity() {
     private val hnmodPicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) confirmAndCompileHnmods(uris)
     }
+    private val hpackPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) confirmAndInstallHpack(uri)
+    }
     private val compiledBuildPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) confirmAndImportBuild(uri)
     }
@@ -171,6 +174,7 @@ class MainActivity : ComponentActivity() {
                 onImportFolder = { folderPicker.launch(null) },
                 onRestoreBackup = { backupPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
                 onCompileHnmod = { hnmodPicker.launch(arrayOf("application/octet-stream", "application/zip", "*/*")) },
+                onInstallHpack = { hpackPicker.launch(arrayOf("application/octet-stream", "application/zip", "*/*")) },
                 onImportBuild = { compiledBuildPicker.launch(arrayOf("application/octet-stream", "*/*")) },
                 onExportBackup = {
                     run("Exporting backup") {
@@ -433,6 +437,31 @@ class MainActivity : ComponentActivity() {
                     })
                     refreshDashboardState()
                     "HNMod build finished."
+                }
+            }
+            .show()
+    }
+
+    private fun confirmAndInstallHpack(uri: Uri) {
+        AlertDialog.Builder(this)
+            .setTitle("Install Horizon modpack?")
+            .setMessage(
+                "Horizon will read this .hpack, resolve its exact mod versions against the official Horizon registry, " +
+                    "download and verify the packages, then install them into a separate private profile. " +
+                    "This does not activate the profile or execute mod code. Unsigned packages are refused by default."
+            )
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Install modpack") { _, _ ->
+                run("Installing Horizon modpack") {
+                    dev.horizon.launcher.data.EmbeddedToolchain.installHpack(
+                        this, uri, allowUnsigned = false,
+                        onProgress = { message -> runOnUiThread { show(message) } },
+                        onLogLine = { message ->
+                            if (message.startsWith("WARNING:") || message.startsWith("ERROR:") || message.startsWith("Hpack")) {
+                                runOnUiThread { show(message) }
+                            }
+                        }
+                    )
                 }
             }
             .show()
