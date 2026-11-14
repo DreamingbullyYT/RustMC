@@ -99,7 +99,7 @@ fn hash_tree(root: &Path, current: &Path, output: &mut BTreeMap<String, String>)
                 digest.update(&buffer[..count]);
             }
             let relative = path.strip_prefix(root).map_err(|e| e.to_string())?;
-            let key = relative.to_str().ok_or_else(|| "SDK cache path is not UTF-8".to_owned())?.replace('\\\\', "/");
+            let key = relative.to_str().ok_or_else(|| "SDK cache path is not UTF-8".to_owned())?.to_owned();
             output.insert(key, format!("{:x}", digest.finalize()));
         } else {
             return Err(format!("SDK cache contains a special file: {}", path.display()));
