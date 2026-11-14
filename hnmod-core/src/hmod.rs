@@ -173,8 +173,8 @@ pub fn read_hmod<R: Read + Seek>(reader: R) -> Result<Hmod, Error> {
 #[serde(tag = "format", rename_all = "lowercase")]
 pub enum Inspected {
     /// Current format.
-    Hmod { id: String, version: String, kind: &'static str, game: Option<String>, horizon: Option<String>,
-           mixins: Option<String>, sha256: String },
+    Hmod { id: String, version: String, api: String, side: String, capabilities: Vec<String>,
+           kind: &'static str, game: Option<String>, horizon: Option<String>, mixins: Option<String>, sha256: String },
     /// Older `.hnmod` bundle, still supported.
     Hnmod { id: String, version: String, game: String, horizon: String, mixins: String, sha256: String },
 }
@@ -189,7 +189,8 @@ pub fn inspect<R: Read + Seek>(mut reader: R) -> Result<Inspected, Error> {
         let m = h.manifest;
         let kind = if m.native.is_some() { "native" } else if m.wasm.is_some() { "wasm" } else { "content" };
         Ok(Inspected::Hmod {
-            id: m.id, version: m.version, kind,
+            id: m.id, version: m.version, api: m.api, side: m.side,
+            capabilities: m.capabilities, kind,
             game: m.native.as_ref().map(|n| n.game.clone()),
             horizon: m.native.as_ref().map(|n| n.horizon.clone()),
             mixins: m.native.as_ref().map(|n| n.mixins.clone()),
@@ -214,7 +215,7 @@ mod tests {
         Cursor::new(z.finish().unwrap().into_inner())
     }
     fn native_toml(extra: &str) -> String {
-        format!("id = \"demo\"\nname = \"Demo\"\nversion = \"1.2.3\"\napi = \"0.2\"\n{extra}\n[native]\ngame = \"26.3\"\nhorizon = \"{}\"\nmixins = \"{}\"\n",
+        format!("id = \"demo\"\nname = \"Demo\"\nversion = \"1.2.3\"\ndescription = \"Demo mod\"\nauthors = [\"Test\"]\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {{}}\n{extra}\n[native]\ngame = \"26.3\"\nhorizon = \"{}\"\nmixins = \"{}\"\n",
             "a".repeat(40), "b".repeat(40))
     }
 
@@ -226,10 +227,7 @@ mod tests {
     }
 
     #[test] fn accepts_nov12_manifest_metadata_and_state_rows() {
-        let t = native_toml("").replace(
-            "[native]",
-            "description = \"A current native mod\"\nauthors = [\"Author\"]\nlicense = \"MIT\"\nside = \"client\"\nnamespaces = [\"demo\"]\n[native]"
-        ) + "[[native.state]]\nid = \"state\"\ntype = \"u32\"\n";
+        let t = native_toml("") + "[[native.state]]\nid = \"state\"\ntype = \"u32\"\n";
         let m = HmodManifest::parse(&t).unwrap();
         assert_eq!(m.side, "client");
         assert_eq!(m.native.unwrap().state[0].id, "state");
@@ -237,7 +235,7 @@ mod tests {
     #[test] fn removed_fields_are_named() {
         let t = native_toml("") + "[[inject]]\nid = \"i\"\nat = \"a\"\nkind = \"head\"\nwith = \"w\"\naccess = \"internals\"\n";
         assert!(HmodManifest::parse(&t).unwrap_err().to_string().contains("access"));
-        let t = "id = \"d\"\nversion = \"1.0.0\"\napi = \"0.2\"\n[[internals]]\npath = \"a\"\n";
+        let t = "id = \"d\"\nname = \"D\"\nversion = \"1.0.0\"\ndescription = \"D\"\nauthors = []\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {{}}\n[[internals]]\npath = \"a\"\n";
         assert!(HmodManifest::parse(t).unwrap_err().to_string().contains("internals"));
     }
     #[test] fn rejects_bad_input() {
@@ -250,13 +248,14 @@ mod tests {
         assert!(HmodManifest::parse(&dup).unwrap_err().to_string().contains("duplicate"));
     }
     #[test] fn content_mod_without_code() {
-        let m = HmodManifest::parse("id = \"pack\"\nversion = \"0.1.0\"\napi = \"0.2\"\n").unwrap();
+        let manifest = "id = \"pack\"\nname = \"Pack\"\nversion = \"0.1.0\"\ndescription = \"Content pack\"\nauthors = []\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {{}}\n";
+        let m = HmodManifest::parse(manifest).unwrap();
         assert!(m.native.is_none() && m.wasm.is_none());
     }
     #[test] fn wasm_hash_is_checked() {
         let wasm = b"\0asm\x01\0\0\0";
         let good = format!("{:x}", Sha512::digest(wasm));
-        let t = |h: &str| format!("id = \"w\"\nversion = \"1.0.0\"\napi = \"0.2\"\n[wasm]\nsha512 = \"{h}\"\ntoolchain = \"x\"\n");
+        let t = |h: &str| format!("id = \"w\"\nname = \"Wasm\"\nversion = \"1.0.0\"\ndescription = \"Wasm mod\"\nauthors = []\nlicense = \"MIT\"\ncredits = \"\"\napi = \"0.2\"\nside = \"client\"\ncapabilities = []\nnamespaces = []\ndependencies = {{}}\n[wasm]\nsha512 = \"{h}\"\ntoolchain = \"x\"\n");
         let ok = zip_of(&[(HMOD_MANIFEST, t(&good).as_bytes()), ("mod.wasm", wasm)]);
         assert!(read_hmod(ok).is_ok());
         let bad = zip_of(&[(HMOD_MANIFEST, t(&"0".repeat(128)).as_bytes()), ("mod.wasm", wasm)]);
