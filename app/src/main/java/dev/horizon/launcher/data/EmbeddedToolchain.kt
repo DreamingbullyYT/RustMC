@@ -90,6 +90,52 @@ object EmbeddedToolchain {
         }
     }
 
+    /** Imports a registry-pinned .hpack into a separate private profile directory. */
+    suspend fun installHpack(
+        activity: Activity,
+        pack: Uri,
+        registryIndex: Uri,
+        allowUnsigned: Boolean = false,
+        onProgress: (String) -> Unit = {},
+        onLogLine: (String) -> Unit = {}
+    ): String = withContext(Dispatchers.IO) {
+        val initial = status(activity)
+        check(initial.supportedAbi) { initial.detail }
+        HnmodBuildLog.begin(activity)
+        fun logLine(message: String) {
+            HnmodBuildLog.append(activity, message)
+            onLogLine(message)
+        }
+        fun progress(message: String) {
+            HnmodBuildLog.append(activity, message)
+            onProgress(message)
+            onLogLine(message)
+        }
+        HnmodBuildService.begin(activity.applicationContext)
+        try {
+            if (!initial.installed) installRuntime(activity, ::progress, ::logLine)
+            progress("Checking registry signature tools")
+            val securityTools = EmbeddedProcessRunner.runShellCommand(
+                activity,
+                "DEBIAN_FRONTEND=noninteractive apt install -y openssl minisign",
+                "hpack-security-tools", onLine = ::logLine
+            )
+            check(securityTools.exitCode == 0) {
+                "Could not install SDK/modpack signature tools (exit ${securityTools.exitCode}). Log: ${securityTools.logFile.absolutePath}"
+            }
+            progress("Preparing Hpack installer")
+            HnmodBuildAdapter.materializeProject(activity)
+            progress("Downloading and verifying pinned Hpack mods")
+            HpackBuildAdapter.install(activity, pack, registryIndex, allowUnsigned, ::logLine)
+        } catch (error: Exception) {
+            logLine("FATAL: ${error.message ?: error::class.java.simpleName}")
+            throw error
+        } finally {
+            HnmodBuildLog.finish(activity)
+            HnmodBuildService.end(activity.applicationContext)
+        }
+    }
+
     private suspend fun installRuntime(
         context: android.content.Context,
         onProgress: (String) -> Unit,
