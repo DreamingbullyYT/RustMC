@@ -16,9 +16,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
         Some("resolve-hmods") => {
-            let target = args.next().ok_or("usage: hnmod resolve-hmods TARGET PROFILE SDK.json MOD.hmod...")?;
+            let target = args.next().ok_or("usage: hnmod resolve-hmods TARGET PROFILE SDK_DIR MOD.hmod...")?;
             let profile = args.next().ok_or("missing profile")?;
-            let sdk_path = args.next().ok_or("missing SDK JSON path")?;
+            let sdk_path = args.next().ok_or("missing installed SDK directory")?;
             let paths: Vec<_> = args.collect();
             if paths.is_empty() { return Err("give at least one native .hmod archive".into()); }
             let mut bundles = Vec::with_capacity(paths.len());
@@ -30,7 +30,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string(&plan)?);
         }
         Some("inspect-sdk") => {
-            let path = args.next().ok_or("usage: hnmod inspect-sdk SDK.json TARGET")?;
+            let path = args.next().ok_or("usage: hnmod inspect-sdk SDK_DIR TARGET")?;
             let target = args.next().ok_or("missing target triple")?;
             if args.next().is_some() { return Err("too many arguments".into()); }
             let sdk = horizon_hnmod_core::sdk::VerifiedIdentity::read(Path::new(&path))?;
@@ -42,7 +42,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 "rust": sdk.index.toolchain.rust,
                 "target": target,
                 "index_sha256": sdk.index_sha256,
-                "authenticated": false
+                "authenticated": true
             }))?);
         }
         Some("inspect-hpack") => {
