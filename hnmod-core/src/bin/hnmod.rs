@@ -25,10 +25,24 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             for path in &paths {
                 bundles.push(horizon_hnmod_core::hmod::read_hmod(std::fs::File::open(path)?)?);
             }
-            let sdk = horizon_hnmod_core::sdk::VerifiedIdentity::read(Path::new(&sdk_path))?;\n            let plan = horizon_hnmod_core::native_plan::resolve(&bundles, &target, &profile, &sdk)?;
+            let sdk = horizon_hnmod_core::sdk::VerifiedIdentity::read(Path::new(&sdk_path))?;
+            let plan = horizon_hnmod_core::native_plan::resolve(&bundles, &target, &profile, &sdk)?;
             println!("{}", serde_json::to_string(&plan)?);
         }
-        Some("inspect-sdk") => {\n            let path = args.next().ok_or("usage: hnmod inspect-sdk SDK.json TARGET")?;\n            let target = args.next().ok_or("missing target triple")?;\n            if args.next().is_some() { return Err("too many arguments".into()); }\n            let sdk = horizon_hnmod_core::sdk::VerifiedIdentity::read(Path::new(&path))?;\n            sdk.require_target(&target, &sdk.index.build.game, &sdk.index.build.commit, &sdk.index.mixins.rev)?;\n            println!("{}", serde_json::to_string(&json!({\n                "build": sdk.index.build, "mixins": sdk.index.mixins,\n                "toolchain": sdk.index.toolchain, "target": target,\n                "index_sha256": sdk.index_sha256,\n                "authenticated": false\n            }))?);\n        }\n        Some("inspect-hpack") => {
+        Some("inspect-sdk") => {
+            let path = args.next().ok_or("usage: hnmod inspect-sdk SDK.json TARGET")?;
+            let target = args.next().ok_or("missing target triple")?;
+            if args.next().is_some() { return Err("too many arguments".into()); }
+            let sdk = horizon_hnmod_core::sdk::VerifiedIdentity::read(Path::new(&path))?;
+            sdk.require_target(&target, &sdk.index.build.game, &sdk.index.build.commit, &sdk.index.mixins.rev)?;
+            println!("{}", serde_json::to_string(&json!({
+                "build": sdk.index.build, "mixins": sdk.index.mixins,
+                "toolchain": sdk.index.toolchain, "target": target,
+                "index_sha256": sdk.index_sha256,
+                "authenticated": false
+            }))?);
+        }
+        Some("inspect-hpack") => {
             let archive = args.next().ok_or("usage: hnmod inspect-hpack FILE.hpack")?;
             if args.next().is_some() { return Err("too many arguments".into()); }
             let report = horizon_hnmod_core::hpack::inspect(std::fs::File::open(archive)?)?;
@@ -165,7 +179,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("Usage:");
             eprintln!("  hnmod inspect FILE.hmod|FILE.hnmod");
             eprintln!("  hnmod resolve-hmods TARGET PROFILE SDK_IDENTITY MOD.hmod...");
-            eprintln!("  hnmod inspect-sdk SDK.json TARGET");\n            eprintln!("  hnmod inspect-hpack FILE.hpack");
+            eprintln!("  hnmod inspect-sdk SDK.json TARGET");\n            eprintln!("  hnmod inspect-sdk SDK.json TARGET");
+            eprintln!("  hnmod inspect-hpack FILE.hpack");
             eprintln!("  hnmod inspect-pack FILE.mrpack");
             eprintln!("  hnmod extract FILE.hnmod NEW_DIRECTORY");
             eprintln!("  hnmod prepare MODS_DIRECTORY PLAN.json");
