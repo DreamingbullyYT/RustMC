@@ -289,11 +289,11 @@ mod tests {
 
     #[test]
     fn rejects_native_cargo_build_scripts_and_features_before_cargo() {
-        let mut build_script = archive("build-script", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
+        let mut build_script = archive("build_script", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
         build_script.files.insert("build.rs".into(), b"fn main() {}".to_vec());
         assert!(resolve(&[build_script], "aarch64-linux-android", "release", &sdk()).unwrap_err().to_string().contains("E_NATIVE_BUILD_SCRIPT"));
 
-        let mut feature = archive("feature-mod", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
+        let mut feature = archive("feature_mod", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
         let mut cargo = String::from_utf8(feature.files["Cargo.toml"].clone()).unwrap();
         cargo.push_str("[features]\ndefault = []\nfast = []\n");
         feature.files.insert("Cargo.toml".into(), cargo.into_bytes());
@@ -302,13 +302,13 @@ mod tests {
 
     #[test]
     fn rejects_unpinned_sdk_sources_and_direct_game_dependencies() {
-        let mut wrong_path = archive("wrong-path", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
+        let mut wrong_path = archive("wrong_path", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
         let cargo = String::from_utf8(wrong_path.files["Cargo.toml"].clone()).unwrap()
             .replace(".horizon/sdk/api/crates/horizon-mod-api", "../horizon-mod-api");
         wrong_path.files.insert("Cargo.toml".into(), cargo.into_bytes());
         assert!(resolve(&[wrong_path], "aarch64-linux-android", "release", &sdk()).unwrap_err().to_string().contains("E_SDK_SOURCE"));
 
-        let mut game_dep = archive("game-dep", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
+        let mut game_dep = archive("game_dep", "1.0.0", &"a".repeat(40), &"b".repeat(40), "");
         let cargo = String::from_utf8(game_dep.files["Cargo.toml"].clone()).unwrap()
             + "horizon-client = { version = \"0.1\" }\n";
         game_dep.files.insert("Cargo.toml".into(), cargo.into_bytes());
