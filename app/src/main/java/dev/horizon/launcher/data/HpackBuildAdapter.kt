@@ -32,7 +32,7 @@ object HpackBuildAdapter {
             val index = if (indexUri != null) {
                 copyUri(context, indexUri, File(input, "registry-index.json"), MAX_INDEX_BYTES, "Registry index")
             } else {
-                fetchOfficialIndex(context, File(input, "registry-index.json"))
+                fetchOfficialIndex(context, File(input, "registry-index.json"), onLogLine)
             }
             val project = File(context.filesDir, "horizon-project")
             val script = File(project, "android/termux/install-hpack.sh")
@@ -58,13 +58,28 @@ object HpackBuildAdapter {
         }
     }
 
-    private fun fetchOfficialIndex(context: Context, destination: File): File {
+    private fun fetchOfficialIndex(context: Context, destination: File, onLogLine: (String) -> Unit): File {
         val cacheDir = File(EmbeddedTermuxPaths.state(context), "horizon-registry")
         require(cacheDir.isDirectory || cacheDir.mkdirs()) { "Cannot create private registry cache." }
         val cached = File(cacheDir, "index.json")
-        val fresh = cached.isFile && System.currentTimeMillis() - cached.lastModified() <= INDEX_CACHE_MS
-        if (!fresh) {
-            val temporary = File(cacheDir, "index.json.part")
+        val temporary = File(cacheDir, "index.json.part")
+        val backup = File(cacheDir, "index.json.previous")
+        val now = System.currentTimeMillis()
+
+        fun isValidIndex(file: File): Boolean = try {
+            if (!file.isFile || file.length() <= 0L || file.length() > MAX_INDEX_BYTES) return false
+            val json = org.json.JSONObject(file.readText(Charsets.UTF_8))
+            json.optInt("schema", -1) == 1 && json.optJSONArray("projects") != null
+        } catch (_: Exception) {
+            false
+        }
+
+        fun cacheAge(): Long = if (cached.isFile) now - cached.lastModified() else Long.MAX_VALUE
+        val age = cacheAge()
+        val validCache = isValidIndex(cached) && age >= 0L && age <= 7L * 24L * 60L * 60L * 1000L
+        val freshCache = validCache && age <= INDEX_CACHE_MS
+
+        if (!freshCache) {
             try {
                 val connection = (URL(INDEX_URL).openConnection() as HttpsURLConnection).apply {
                     connectTimeout = 15_000
@@ -81,8 +96,8 @@ object HpackBuildAdapter {
                     check(connection.url.protocol == "https" && connection.url.host == "horizon-rust.github.io") {
                         "Horizon registry URL is not the trusted HTTPS endpoint."
                     }
-                    connection.inputStream.use { input ->
-                        FileOutputStream(temporary).use { output ->
+                    FileOutputStream(temporary).use { output ->
+                        connection.inputStream.use { input ->
                             val buffer = ByteArray(64 * 1024)
                             var total = 0L
                             while (true) {
@@ -94,21 +109,38 @@ object HpackBuildAdapter {
                             }
                         }
                     }
-                    require(temporary.isFile && temporary.length() > 0L) { "Horizon registry returned an empty index." }
-                    val json = org.json.JSONObject(temporary.readText(Charsets.UTF_8))
-                    require(json.optInt("schema", -1) == 1 && json.optJSONArray("projects") != null) {
-                        "Horizon registry index has an unsupported schema."
+                    require(isValidIndex(temporary)) { "Horizon registry index has an unsupported schema or invalid JSON." }
+
+                    if (backup.exists()) backup.delete()
+                    if (cached.exists()) {
+                        check(cached.renameTo(backup)) { "Could not stage the previous Horizon registry cache." }
                     }
-                    if (cached.exists()) cached.delete()
-                    check(temporary.renameTo(cached)) { "Could not atomically cache the Horizon registry index." }
+                    if (!temporary.renameTo(cached)) {
+                        if (backup.exists()) backup.renameTo(cached)
+                        error("Could not atomically cache the Horizon registry index.")
+                    }
+                    backup.delete()
+                    onLogLine("Official Horizon registry index refreshed and cached")
                 } finally {
                     connection.disconnect()
                 }
             } catch (error: Exception) {
                 temporary.delete()
-                throw IllegalStateException("Could not refresh the Horizon registry index: ${error.message}", error)
+                if (validCache) {
+                    onLogLine("WARNING: registry refresh failed; using the validated cached index (${error.message})")
+                } else {
+                    backup.delete()
+                    throw IllegalStateException(
+                        "Could not refresh the Horizon registry index and no recent valid cache is available: ${error.message}",
+                        error
+                    )
+                }
             }
+        } else {
+            onLogLine("Using the recently cached official Horizon registry index")
         }
+
+        require(isValidIndex(cached)) { "No valid Horizon registry index is available." }
         cached.copyTo(destination, overwrite = true)
         return destination
     }
