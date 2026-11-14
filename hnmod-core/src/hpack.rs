@@ -37,7 +37,7 @@ fn default_on() -> bool { true }
 pub struct HpackReport {
     pub format: &'static str, pub id: String, pub name: String, pub version: String,
     pub game: String, pub mods: Vec<ModPinReport>, pub overrides: Vec<String>,
-    pub override_bytes: u64, pub sha256: String,
+    pub override_bytes: u64, pub content_fingerprint_sha256: String,
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct ModPinReport {
@@ -53,7 +53,7 @@ fn safe_path(path: &str) -> bool {
 }
 fn allowed_override(path: &str, mod_ids: &BTreeSet<String>) -> bool {
     if path == "options.txt" || path == "horizon-graphics.txt" || path == "horizon-extras.txt" { return true; }
-    if let Some(rest) = path.strip_prefix("resourcepacks/") { return !rest.is_empty() && !rest.contains('/'); }
+    if let Some(rest) = path.strip_prefix("resourcepacks/") { return rest.ends_with(".zip") && !rest.is_empty() && !rest.contains('/'); }
     let Some(rest) = path.strip_prefix("horizon-mods/.horizon-mod-data/") else { return false };
     let Some((id, _)) = rest.split_once('/') else { return false };
     mod_ids.contains(id) && rest.len() > id.len() + 1
@@ -125,7 +125,7 @@ pub fn inspect<R: Read + Seek>(reader: R) -> Result<HpackReport, String> {
     Ok(HpackReport {
         format: "hpack", id: manifest.id, name: manifest.name, version: manifest.version,
         game: manifest.game, mods, overrides: override_paths, override_bytes: override_total,
-        sha256: format!("{:x}", digest.finalize()),
+        content_fingerprint_sha256: format!("{:x}", digest.finalize()),
     })
 }
 
