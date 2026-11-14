@@ -108,7 +108,7 @@ impl VerifiedIdentity {
             let name = format!("{kind}-{target}.tar.xz");
             let asset = index.assets.get(&name)
                 .ok_or_else(|| format!("SDK has no {target} {kind} slice; this target is not published"))?;
-            if asset.target.as_deref() != Some(target) || asset.codec != "xz" {
+            if asset.target.as_deref() != Some(target) || asset.codec != "xz" || asset.kind != kind {
                 return Err(format!("SDK asset {name} has inconsistent target or codec metadata"));
             }
         }
@@ -122,4 +122,59 @@ fn revision(value: &str) -> bool {
 
 fn hex(value: &str, len: usize) -> bool {
     value.len() == len && value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn index(target: &str) -> serde_json::Value {
+        let mut assets = serde_json::Map::new();
+        for name in ["surface.json", "build-data.tar.xz", "api-source.tar.xz"] {
+            assets.insert(name.into(), json!({"sha256":"a".repeat(64),"size":1,"kind":"surface","codec":"xz"}));
+        }
+        for kind in ["runtime", "api", "engine"] {
+            assets.insert(format!("{kind}-{target}.tar.xz"), json!({
+                "sha256":"b".repeat(64), "size":1, "kind":kind, "codec":"xz",
+                "target":target, "side":"client"
+            }));
+        }
+        json!({
+            "schema":1,
+            "build":{"commit":"a".repeat(40),"game":"26.3"},
+            "package_format":1,
+            "toolchain":{"rust":"1.95.0"},
+            "content_api":"0.2",
+            "surface":{"hash":"x"},
+            "mixins":{"rev":"b".repeat(40),"patch":"c".repeat(64)},
+            "assets":assets,
+            "inputs":{}
+        })
+    }
+
+    #[test]
+    fn reads_sdk_index_and_checks_android_slices_and_pins() {
+        let value = index("aarch64-linux-android");
+        let parsed: SdkIndex = serde_json::from_value(value).unwrap();
+        let identity = VerifiedIdentity { index: parsed, index_sha256: "d".repeat(64) };
+        identity.require_target("aarch64-linux-android", "26.3", &"a".repeat(40), &"b".repeat(40)).unwrap();
+    }
+
+    #[test]
+    fn refuses_desktop_sdk_for_android() {
+        let value = index("x86_64-unknown-linux-gnu");
+        let parsed: SdkIndex = serde_json::from_value(value).unwrap();
+        let identity = VerifiedIdentity { index: parsed, index_sha256: "d".repeat(64) };
+        let error = identity.require_target("aarch64-linux-android", "26.3", &"a".repeat(40), &"b".repeat(40)).unwrap_err();
+        assert!(error.contains("this target is not published"));
+    }
+
+    #[test]
+    fn refuses_wrong_game_or_mixins_pin() {
+        let parsed: SdkIndex = serde_json::from_value(index("aarch64-linux-android")).unwrap();
+        let identity = VerifiedIdentity { index: parsed, index_sha256: "d".repeat(64) };
+        assert!(identity.require_target("aarch64-linux-android", "26.3", &"e".repeat(40), &"b".repeat(40)).is_err());
+        assert!(identity.require_target("aarch64-linux-android", "26.3", &"a".repeat(40), &"f".repeat(40)).is_err());
+    }
 }
