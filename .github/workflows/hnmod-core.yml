@@ -241,6 +241,19 @@ jobs:
           python3 - <<'PY'
           import hashlib, io, json, pathlib, runpy, tempfile, types, urllib.request, zipfile
           installer = runpy.run_path("android/termux/install-hpack.py", run_name="hpack_installer_test")
+          assert not installer["allowed_override"]("../escape")
+          assert not installer["allowed_override"]("unowned.txt")
+          with tempfile.TemporaryDirectory() as security_tmp:
+              security_root = pathlib.Path(security_tmp) / "profile"
+              outside = pathlib.Path(security_tmp) / "outside"
+              security_root.mkdir(); outside.mkdir()
+              (security_root / "linked").symlink_to(outside, target_is_directory=True)
+              try:
+                  installer["safe_target"](security_root, "linked/escape.txt", create_parents=True)
+              except RuntimeError:
+                  pass
+              else:
+                  raise AssertionError("symlink ancestor was accepted in a profile path")
           payload = b"validated hmod archive bytes"
           digest = hashlib.sha256(payload).hexdigest()
           plan = {
@@ -289,6 +302,13 @@ jobs:
               assert (profile / "options.txt").read_text() == "renderDistance=8"
               assert (profile / "horizon-mods.txt").read_text() == "mod.demo:true\n"
               assert (profile / ".hpack-install.json").is_file()
+              # A forged/stale receipt cannot claim ownership of arbitrary profile files.
+              unowned = profile / "unowned.txt"
+              unowned.write_text("keep me")
+              receipt_path = profile / ".hpack-install.json"
+              receipt = json.loads(receipt_path.read_text())
+              receipt["overrides"]["unowned.txt"] = hashlib.sha256(b"keep me").hexdigest()
+              receipt_path.write_text(json.dumps(receipt))
               # A later pack revision removes old pack-owned mods and unchanged overrides transactionally.
               plan2 = dict(plan, profile_version="1.1.0", overrides=[], mods=[], content_fingerprint_sha256="b" * 64)
               cli.write_text(
@@ -304,6 +324,7 @@ jobs:
               assert result2["mods_installed"] == 0
               assert not (profile / "horizon-mods/demo.hmod").exists()
               assert not (profile / "options.txt").exists()
+              assert unowned.read_text() == "keep me"
               assert (profile / "horizon-mods.txt").read_text() == ""
           PY
       - name: Verify pinned mixins build uses a local checkout
