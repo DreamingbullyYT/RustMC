@@ -244,13 +244,17 @@ def install(args) -> dict:
             previous_receipt = json.loads(previous_receipt_path.read_text(encoding="utf-8"))
         except ValueError as error:
             fail(f"previous Hpack receipt is invalid; refusing update: {error}")
+        if not isinstance(previous_receipt, dict) or not isinstance(previous_receipt.get("mods", []), list):
+            fail("previous Hpack receipt has an invalid mods list; refusing update")
     previous_mod_ids = {
         item.get("id") for item in previous_receipt.get("mods", [])
         if isinstance(item, dict) and isinstance(item.get("id"), str)
+        and item.get("id").isascii() and item.get("id").replace("_", "").isalnum()
+        and item.get("id") == item.get("id").lower() and 1 <= len(item.get("id")) <= 64
     }
     previous_mod_paths = set()
     for item in previous_receipt.get("mods", []):
-        if not isinstance(item, dict) or item.get("kind") not in ("mod", "native-mod") or not isinstance(item.get("id"), str):
+        if not isinstance(item, dict) or item.get("kind") not in ("mod", "native-mod") or item.get("id") not in previous_mod_ids:
             continue
         folder = "horizon-native-mods" if item["kind"] == "native-mod" else "horizon-mods"
         previous_mod_paths.add(f"{folder}/{item['id']}.hmod")
