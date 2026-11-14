@@ -16,19 +16,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
         Some("resolve-hmods") => {
-            let target = args.next().ok_or("usage: hnmod resolve-hmods TARGET PROFILE SDK_IDENTITY MOD.hmod...")?;
+            let target = args.next().ok_or("usage: hnmod resolve-hmods TARGET PROFILE SDK.json MOD.hmod...")?;
             let profile = args.next().ok_or("missing profile")?;
-            let sdk_identity = args.next().ok_or("missing SDK identity")?;
+            let sdk_path = args.next().ok_or("missing SDK JSON path")?;
             let paths: Vec<_> = args.collect();
             if paths.is_empty() { return Err("give at least one native .hmod archive".into()); }
             let mut bundles = Vec::with_capacity(paths.len());
             for path in &paths {
                 bundles.push(horizon_hnmod_core::hmod::read_hmod(std::fs::File::open(path)?)?);
             }
-            let plan = horizon_hnmod_core::native_plan::resolve(&bundles, &target, &profile, &sdk_identity)?;
+            let sdk = horizon_hnmod_core::sdk::VerifiedIdentity::read(Path::new(&sdk_path))?;\n            let plan = horizon_hnmod_core::native_plan::resolve(&bundles, &target, &profile, &sdk)?;
             println!("{}", serde_json::to_string(&plan)?);
         }
-        Some("inspect-hpack") => {
+        Some("inspect-sdk") => {\n            let path = args.next().ok_or("usage: hnmod inspect-sdk SDK.json TARGET")?;\n            let target = args.next().ok_or("missing target triple")?;\n            if args.next().is_some() { return Err("too many arguments".into()); }\n            let sdk = horizon_hnmod_core::sdk::VerifiedIdentity::read(Path::new(&path))?;\n            sdk.require_target(&target, &sdk.index.build.game, &sdk.index.build.commit, &sdk.index.mixins.rev)?;\n            println!("{}", serde_json::to_string(&json!({\n                "build": sdk.index.build, "mixins": sdk.index.mixins,\n                "toolchain": sdk.index.toolchain, "target": target,\n                "index_sha256": sdk.index_sha256,\n                "authenticated": false\n            }))?);\n        }\n        Some("inspect-hpack") => {
             let archive = args.next().ok_or("usage: hnmod inspect-hpack FILE.hpack")?;
             if args.next().is_some() { return Err("too many arguments".into()); }
             let report = horizon_hnmod_core::hpack::inspect(std::fs::File::open(archive)?)?;
@@ -165,7 +165,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("Usage:");
             eprintln!("  hnmod inspect FILE.hmod|FILE.hnmod");
             eprintln!("  hnmod resolve-hmods TARGET PROFILE SDK_IDENTITY MOD.hmod...");
-            eprintln!("  hnmod inspect-hpack FILE.hpack");
+            eprintln!("  hnmod inspect-sdk SDK.json TARGET");\n            eprintln!("  hnmod inspect-hpack FILE.hpack");
             eprintln!("  hnmod inspect-pack FILE.mrpack");
             eprintln!("  hnmod extract FILE.hnmod NEW_DIRECTORY");
             eprintln!("  hnmod prepare MODS_DIRECTORY PLAN.json");
