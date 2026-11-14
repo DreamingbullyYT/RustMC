@@ -36,6 +36,7 @@ fn default_on() -> bool { true }
 #[derive(Clone, Debug, Serialize)]
 pub struct HpackReport {
     pub format: &'static str, pub id: String, pub name: String, pub version: String,
+    pub description: String, pub authors: Vec<String>,
     pub game: String, pub mods: Vec<ModPinReport>, pub overrides: Vec<String>,
     pub override_bytes: u64, pub content_fingerprint_sha256: String,
 }
@@ -53,10 +54,12 @@ fn safe_path(path: &str) -> bool {
 }
 fn allowed_override(path: &str, mod_ids: &BTreeSet<String>) -> bool {
     if path == "options.txt" || path == "horizon-graphics.txt" || path == "horizon-extras.txt" { return true; }
-    if let Some(rest) = path.strip_prefix("resourcepacks/") { return rest.ends_with(".zip") && !rest.is_empty() && !rest.contains('/'); }
+    let plain = |part: &str| !part.is_empty() && !part.starts_with('.')
+        && part.bytes().all(|b| b.is_ascii_alphanumeric() || b". _-+".contains(&b));
+    if let Some(rest) = path.strip_prefix("resourcepacks/") { return plain(rest) && rest.ends_with(".zip"); }
     let Some(rest) = path.strip_prefix("horizon-mods/.horizon-mod-data/") else { return false };
-    let Some((id, _)) = rest.split_once('/') else { return false };
-    mod_ids.contains(id) && rest.len() > id.len() + 1
+    let Some((id, tail)) = rest.split_once('/') else { return false };
+    mod_ids.contains(id) && !tail.is_empty() && tail.split('/').all(plain)
 }
 
 /// Validate a Horizon hpack ZIP without installing mods or copying overrides.
@@ -73,28 +76,48 @@ pub fn inspect<R: Read + Seek>(reader: R) -> Result<HpackReport, String> {
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
         let name = entry.name().map_err(|e| e.to_string())?.into_owned();
         let is_dir = entry.is_dir();
+        if entry.unix_mode().is_some_and(|mode| {
+            let kind = mode & 0o170000;
+            kind != 0 && kind != 0o100000 && kind != 0o040000
+        }) {
+            return Err(format!("non-regular hpack entry: {name}"));
+        }
         let checked = if is_dir { name.trim_end_matches('/') } else { name.as_str() };
         if !safe_path(checked) { return Err(format!("unsafe hpack path: {name}")); }
         if !seen.insert(name.clone()) { return Err(format!("duplicate hpack entry: {name}")); }
-        if is_dir { continue; }
+        if is_dir {
+            if checked != "overrides" && !checked.starts_with("overrides/") {
+                return Err(format!("unexpected hpack directory: {name}"));
+            }
+            continue;
+        }
         if name == MANIFEST {
             if entry.size() > 1024 * 1024 { return Err("horizon-modpack.toml exceeds 1 MiB".into()); }
             let mut bytes = Vec::new();
             entry.take(1024 * 1024 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
             if bytes.len() > 1024 * 1024 { return Err("horizon-modpack.toml exceeds 1 MiB".into()); }
+            digest.update((name.len() as u64).to_le_bytes());
+            digest.update(name.as_bytes());
+            digest.update((bytes.len() as u64).to_le_bytes());
             digest.update(&bytes);
             manifest_bytes = Some(bytes);
         } else if let Some(path) = name.strip_prefix("overrides/") {
             if !safe_path(path) { return Err(format!("unsafe override path: {name}")); }
             if entry.size() > MAX_OVERRIDE_FILE { return Err(format!("{name} exceeds 64 MiB")); }
-            override_total = override_total.saturating_add(entry.size());
-            if override_total > MAX_OVERRIDE_TOTAL { return Err("hpack overrides exceed 256 MiB".into()); }
+            digest.update((name.len() as u64).to_le_bytes());
+            digest.update(name.as_bytes());
+            let mut file_bytes = 0u64;
             let mut buffer = [0u8; 16 * 1024];
             loop {
                 let count = entry.read(&mut buffer).map_err(|e| e.to_string())?;
                 if count == 0 { break; }
+                file_bytes = file_bytes.saturating_add(count as u64);
+                override_total = override_total.saturating_add(count as u64);
+                if file_bytes > MAX_OVERRIDE_FILE { return Err(format!("{name} exceeds 64 MiB")); }
+                if override_total > MAX_OVERRIDE_TOTAL { return Err("hpack overrides exceed 256 MiB".into()); }
                 digest.update(&buffer[..count]);
             }
+            digest.update(file_bytes.to_le_bytes());
             override_paths.push(path.to_owned());
         } else {
             return Err(format!("unexpected hpack entry: {name}"));
@@ -124,6 +147,7 @@ pub fn inspect<R: Read + Seek>(reader: R) -> Result<HpackReport, String> {
     override_paths.sort();
     Ok(HpackReport {
         format: "hpack", id: manifest.id, name: manifest.name, version: manifest.version,
+        description: manifest.description, authors: manifest.authors,
         game: manifest.game, mods, overrides: override_paths, override_bytes: override_total,
         content_fingerprint_sha256: format!("{:x}", digest.finalize()),
     })
@@ -155,6 +179,16 @@ mod tests {
     #[test] fn resourcepack_overrides_must_be_zip_files() {
         assert!(inspect(pack(&manifest(), "resourcepacks/visual.zip")).is_ok());
         assert!(inspect(pack(&manifest(), "resourcepacks/visual.txt")).unwrap_err().contains("not permitted"));
+    }
+
+    #[test]
+    fn rejects_directories_outside_overrides_and_hidden_resourcepacks() {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file(MANIFEST, SimpleFileOptions::default()).unwrap();
+        zip.write_all(manifest().as_bytes()).unwrap();
+        zip.add_directory("random/", SimpleFileOptions::default()).unwrap();
+        assert!(inspect(Cursor::new(zip.finish().unwrap().into_inner())).unwrap_err().contains("unexpected hpack directory"));
+        assert!(inspect(pack(&manifest(), "resourcepacks/.hidden.zip")).unwrap_err().contains("not permitted"));
     }
     #[test] fn refuses_unlisted_mod_settings_and_unknown_files() {
         assert!(inspect(pack(&manifest(), "horizon-mods/.horizon-mod-data/other/settings.json")).unwrap_err().contains("not permitted"));
