@@ -171,6 +171,8 @@ jobs:
               def archive(name, kind, target_value=None):
                   buffer = io.BytesIO()
                   with tarfile.open(fileobj=buffer, mode="w:xz") as tar:
+                      root_info = tarfile.TarInfo("."); root_info.type = tarfile.DIRTYPE
+                      tar.addfile(root_info)
                       payload = b"verified sdk payload"
                       info = tarfile.TarInfo("marker.txt"); info.size = len(payload)
                       tar.addfile(info, io.BytesIO(payload))
