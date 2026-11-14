@@ -108,6 +108,7 @@ fun HorizonLauncherUi(
     onImportFolder: () -> Unit,
     onRestoreBackup: () -> Unit,
     onCompileHnmod: () -> Unit,
+    onInstallHpack: () -> Unit,
     onImportBuild: () -> Unit,
     onExportBackup: () -> Unit,
     onShowBuildLog: () -> Unit,
@@ -169,6 +170,7 @@ fun HorizonLauncherUi(
                                 HomeTab.COMPILE -> BuildPage(
                                     toolchainReady = toolchainReady,
                                     onCompile = onCompileHnmod,
+                                    onInstallHpack = onInstallHpack,
                                     onImportBuild = onImportBuild,
                                     onShowBuildLog = onShowBuildLog
                                 )
@@ -428,6 +430,7 @@ private fun ModsPage(
 private fun BuildPage(
     toolchainReady: Boolean,
     onCompile: () -> Unit,
+    onInstallHpack: () -> Unit,
     onImportBuild: () -> Unit,
     onShowBuildLog: () -> Unit
 ) {
@@ -479,6 +482,15 @@ private fun BuildPage(
                 Spacer(Modifier.width(8.dp))
                 Text("Select HNMods and compile", fontWeight = FontWeight.Bold)
             }
+        }
+        Spacer(Modifier.height(12.dp))
+        GlassCard {
+            Text("Horizon modpacks", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Install a .hpack from the official registry into an isolated profile. Profile activation is not available yet.",
+                color = MutedInk, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, bottom = 10.dp)
+            )
+            ActionPill("Install .hpack modpack", Icons.Default.Inventory2, onInstallHpack, Modifier.fillMaxWidth())
         }
         Spacer(Modifier.height(12.dp))
         GlassCard {
