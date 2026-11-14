@@ -84,6 +84,9 @@ jobs:
           cmp -s hnmod-core/src/bin/hnmod.rs app/src/main/assets/hnmod/hnmod-core/src/bin/hnmod.rs
           cmp -s hnmod-core/src/dependencies.rs app/src/main/assets/hnmod/hnmod-core/src/dependencies.rs
           cmp -s hnmod-core/src/pc_api.rs app/src/main/assets/hnmod/hnmod-core/src/pc_api.rs
+          cmp -s hnmod-core/src/hmod.rs app/src/main/assets/hnmod/hnmod-core/src/hmod.rs
+          cmp -s hnmod-core/src/hpack.rs app/src/main/assets/hnmod/hnmod-core/src/hpack.rs
+          cmp -s hnmod-core/src/modpack.rs app/src/main/assets/hnmod/hnmod-core/src/modpack.rs
           grep -q 'HnmodBuildAdapter.compile' app/src/main/java/dev/horizon/launcher/data/EmbeddedToolchain.kt
           grep -q 'SYMLINKS.txt' app/src/main/java/dev/horizon/launcher/data/EmbeddedBootstrapInstaller.kt
           grep -q 'TERMUX_IS_TERMUX' app/src/main/java/dev/horizon/launcher/data/EmbeddedProcessRunner.kt
