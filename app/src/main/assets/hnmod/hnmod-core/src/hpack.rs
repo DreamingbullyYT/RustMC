@@ -71,7 +71,7 @@ pub fn inspect<R: Read + Seek>(reader: R) -> Result<HpackReport, String> {
     use sha2::Digest;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
-        let name = entry.name().to_owned();
+        let name = entry.name().map_err(|e| e.to_string())?.into_owned();
         let is_dir = entry.is_dir();
         let checked = if is_dir { name.trim_end_matches('/') } else { name.as_str() };
         if !safe_path(checked) { return Err(format!("unsafe hpack path: {name}")); }
