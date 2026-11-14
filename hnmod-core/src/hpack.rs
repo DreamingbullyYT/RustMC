@@ -192,6 +192,7 @@ struct Revoked {
 #[derive(Clone, Debug, Serialize)]
 pub struct ResolvedPackMod {
     pub id: String,
+    pub kind: String,
     pub version: String,
     pub file_name: String,
     pub url: String,
@@ -301,6 +302,7 @@ pub fn resolve(path: &std::path::Path, index_json: &str) -> Result<HpackInstallP
         }
         resolved.push(ResolvedPackMod {
             id: pin.id,
+            kind: project.kind.clone(),
             version: pin.version,
             file_name: file.name.clone(),
             url: file.url.clone(),
