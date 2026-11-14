@@ -11,7 +11,11 @@ use std::{collections::BTreeMap, path::Path};
 pub struct SdkIndex {
     pub schema: u32,
     pub build: Build,
+    pub package_format: u32,
     pub toolchain: Toolchain,
+    pub content_api: String,
+    pub surface: Surface,
+    pub inputs: serde_json::Value,
     pub mixins: Mixins,
     pub assets: BTreeMap<String, Asset>,
 }
@@ -20,6 +24,18 @@ pub struct SdkIndex {
 pub struct Build {
     pub commit: String,
     pub game: String,
+    pub date: String,
+    #[serde(default)]
+    pub nightly: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Surface {
+    pub hash: String,
+    #[serde(default)]
+    pub previous: Option<String>,
+    #[serde(default)]
+    pub changes: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -71,7 +87,9 @@ impl VerifiedIdentity {
         if !revision(&index.build.commit) || !revision(&index.mixins.rev) {
             return Err("SDK game and mixins revisions must be full lowercase commit IDs".into());
         }
-        if index.build.game.trim().is_empty() || index.toolchain.rust.trim().is_empty() {
+        if index.build.game.trim().is_empty() || index.toolchain.rust.trim().is_empty()
+            || index.content_api.trim().is_empty() || index.surface.hash.trim().is_empty()
+            || index.package_format == 0 {
             return Err("SDK game version and Rust toolchain identity are required".into());
         }
         if !hex(&index.mixins.patch, 64) {
@@ -85,9 +103,15 @@ impl VerifiedIdentity {
                 return Err(format!("SDK asset {name} has an invalid SHA-256 or size"));
             }
         }
-        for name in ["surface.json", "build-data.tar.xz", "api-source.tar.xz"] {
-            if !index.assets.contains_key(name) {
-                return Err(format!("SDK index is missing required asset {name}"));
+        for (name, kind, codec) in [
+            ("surface.json", "surface", "none"),
+            ("build-data.tar.xz", "build-data", "xz"),
+            ("api-source.tar.xz", "api-source", "xz"),
+        ] {
+            let asset = index.assets.get(name)
+                .ok_or_else(|| format!("SDK index is missing required asset {name}"))?;
+            if asset.kind != kind || asset.codec != codec || asset.target.is_some() || asset.side.is_some() {
+                return Err(format!("SDK asset {name} has inconsistent kind/codec metadata"));
             }
         }
         Ok(())
@@ -132,7 +156,9 @@ mod tests {
     fn index(target: &str) -> serde_json::Value {
         let mut assets = serde_json::Map::new();
         for name in ["surface.json", "build-data.tar.xz", "api-source.tar.xz"] {
-            assets.insert(name.into(), json!({"sha256":"a".repeat(64),"size":1,"kind":"surface","codec":"xz"}));
+            let kind = if name == "surface.json" { "surface" } else if name == "build-data.tar.xz" { "build-data" } else { "api-source" };
+            let codec = if name == "surface.json" { "none" } else { "xz" };
+            assets.insert(name.into(), json!({"sha256":"a".repeat(64),"size":1,"kind":kind,"codec":codec}));
         }
         for kind in ["runtime", "api", "engine"] {
             assets.insert(format!("{kind}-{target}.tar.xz"), json!({
