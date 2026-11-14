@@ -52,6 +52,49 @@ def safe_relative(value: str) -> Path:
     return Path(*path.parts)
 
 
+def allowed_override(value: str) -> bool:
+    try:
+        relative = safe_relative(value).as_posix()
+    except RuntimeError:
+        return False
+    if relative in ("options.txt", "horizon-graphics.txt", "horizon-extras.txt"):
+        return True
+    parts = relative.split("/")
+    if len(parts) == 2 and parts[0] == "resourcepacks":
+        return not parts[1].startswith(".") and parts[1].endswith(".zip") and all(
+            ch.isascii() and (ch.isalnum() or ch in ". _-+") for ch in parts[1]
+        )
+    if len(parts) >= 4 and parts[:2] == ["horizon-mods", ".horizon-mod-data"]:
+        mod_id, tail = parts[2], parts[3:]
+        valid_id = 1 <= len(mod_id) <= 64 and mod_id.isascii() and mod_id == mod_id.lower() and mod_id.replace("_", "").isalnum()
+        valid_tail = all(
+            part and not part.startswith(".") and all(
+                ch.isascii() and (ch.isalnum() or ch in ". _-+") for ch in part
+            ) for part in tail
+        )
+        return valid_id and valid_tail
+    return False
+
+
+def safe_target(root: Path, relative: str, create_parents: bool = False) -> Path:
+    rel = safe_relative(relative)
+    root = root.resolve()
+    current = root
+    for part in rel.parts[:-1]:
+        current = current / part
+        if current.is_symlink():
+            fail(f"profile path contains a symlink: {current}")
+        if current.exists() and not current.is_dir():
+            fail(f"profile path parent is not a directory: {current}")
+        if create_parents:
+            current.mkdir(exist_ok=True)
+        if current.exists():
+            resolved = current.resolve()
+            if resolved != root and root not in resolved.parents:
+                fail(f"profile path escapes its root: {relative}")
+    return root / rel
+
+
 def download(item: dict, destination: Path) -> None:
     name, url = item["file_name"], item["url"]
     parsed = urllib.parse.urlparse(url)
@@ -180,6 +223,8 @@ def updated_mod_list(profile: Path, mods: list[dict], remove_ids: set[str]) -> b
 
 
 def commit_files(profile: Path, staging: Path, relative_files: list[str], delete_files: list[str]) -> None:
+    if len(relative_files) != len(set(relative_files)) or set(relative_files) & set(delete_files):
+        fail("Hpack transaction contains duplicate or conflicting paths")
     backup = staging / "backup"
     backup.mkdir()
     installed: list[Path] = []
@@ -189,11 +234,7 @@ def commit_files(profile: Path, staging: Path, relative_files: list[str], delete
         for relative in relative_files:
             rel = safe_relative(relative)
             source = staging / "new" / rel
-            target = profile / rel
-            target.parent.mkdir(parents=True, exist_ok=True)
-            resolved_parent = target.parent.resolve()
-            if resolved_parent != root and root not in resolved_parent.parents:
-                fail(f"profile path escapes its root: {relative}")
+            target = safe_target(root, relative, create_parents=True)
             if target.is_symlink() or (target.exists() and not target.is_file()):
                 fail(f"refusing to replace a non-regular profile path: {target}")
             if target.exists():
@@ -204,16 +245,12 @@ def commit_files(profile: Path, staging: Path, relative_files: list[str], delete
             os.replace(source, target)
             installed.append(target)
         for relative in delete_files:
-            rel = safe_relative(relative)
-            target = profile / rel
+            target = safe_target(root, relative)
             if target.is_symlink() or (target.exists() and not target.is_file()):
                 fail(f"refusing to delete a non-regular profile path: {target}")
             if not target.exists():
                 continue
-            resolved_parent = target.parent.resolve()
-            if resolved_parent != root and root not in resolved_parent.parents:
-                fail(f"profile path escapes its root: {relative}")
-            saved_path = backup / rel
+            saved_path = backup / safe_relative(relative)
             saved_path.parent.mkdir(parents=True, exist_ok=True)
             os.replace(target, saved_path)
             saved.append((saved_path, target))
@@ -280,6 +317,13 @@ def install(args) -> dict:
     previous_override_hashes = previous_receipt.get("overrides", {})
     if not isinstance(previous_override_hashes, dict):
         previous_override_hashes = {}
+    # A receipt is data, not authority: only remove paths that the Hpack format itself permits.
+    previous_override_hashes = {
+        path: digest for path, digest in previous_override_hashes.items()
+        if isinstance(path, str) and allowed_override(path)
+        and isinstance(digest, str) and len(digest) == 64
+        and all(char in "0123456789abcdef" for char in digest)
+    }
     staging = Path(tempfile.mkdtemp(prefix=".hpack-stage-", dir=profile))
     try:
         new_root = staging / "new"
@@ -350,7 +394,7 @@ def install(args) -> dict:
         for relative, old_hash in previous_override_hashes.items():
             if relative in new_override_paths or not isinstance(old_hash, str):
                 continue
-            target = profile / safe_relative(relative)
+            target = safe_target(profile, relative)
             if target.is_file() and not target.is_symlink() and sha256(target) == old_hash:
                 stale_override_paths.append(relative)
         delete_files = sorted(stale_mod_paths | set(stale_override_paths))
