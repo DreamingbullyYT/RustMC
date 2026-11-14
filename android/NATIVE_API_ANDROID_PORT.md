@@ -71,5 +71,6 @@ The upstream `tools/prebuilt_game.py build` currently uses the build machine's `
 
 - `hnmod-core/src/sdk.rs` reads the upstream SDK index shape, validates its identity fields and refuses target slices that are not explicitly present.
 - `native_plan.rs` now binds HMOD pins to the SDK's exact game commit, mixins revision and target slices.
-- This reader computes an index digest but **does not authenticate the SDK signature or download/install assets**. Those are still required before this index may be trusted.
+- `android/termux/native-sdk.sh` verifies the Ed25519 signature for the exact `sdk-<commit>` tag and checks every signed asset hash before extraction. OpenSSL is included in the embedded Termux toolchain. The verifier is tested with generated signing keys, including a tampered-asset rejection case.
+- The Rust index reader computes an index digest but does not authenticate it on its own; the signed shell verifier must run first. The verifier is not yet connected to a real SDK downloader/installer.
 - The Android SDK target is not currently published by the upstream fork's desktop builder. Therefore the new Android native compiler remains intentionally gated and cannot yet produce a native Android build.
