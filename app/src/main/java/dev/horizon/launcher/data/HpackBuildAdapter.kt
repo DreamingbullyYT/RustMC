@@ -66,12 +66,17 @@ object HpackBuildAdapter {
         val backup = File(cacheDir, "index.json.previous")
         val now = System.currentTimeMillis()
 
-        fun isValidIndex(file: File): Boolean = try {
-            if (!file.isFile || file.length() <= 0L || file.length() > MAX_INDEX_BYTES) return false
-            val json = org.json.JSONObject(file.readText(Charsets.UTF_8))
-            json.optInt("schema", -1) == 1 && json.optJSONArray("projects") != null
-        } catch (_: Exception) {
-            false
+        fun isValidIndex(file: File): Boolean {
+            return try {
+                if (!file.isFile || file.length() <= 0L || file.length() > MAX_INDEX_BYTES) {
+                    false
+                } else {
+                    val json = org.json.JSONObject(file.readText(Charsets.UTF_8))
+                    json.optInt("schema", -1) == 1 && json.optJSONArray("projects") != null
+                }
+            } catch (_: Exception) {
+                false
+            }
         }
 
         fun cacheAge(): Long = if (cached.isFile) now - cached.lastModified() else Long.MAX_VALUE
