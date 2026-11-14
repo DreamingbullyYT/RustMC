@@ -206,10 +206,9 @@ mod tests {
     }
 
     #[test]
-
-    #[test]
     fn reads_only_an_installed_sdk_with_a_matching_signature_receipt() {
-        let temp = std::env::temp_dir().join(format!("hnmod-sdk-test-{}", std::process::id()));
+        let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let temp = std::env::temp_dir().join(format!("hnmod-sdk-test-{}-{nonce}", std::process::id()));
         let _ = std::fs::remove_dir_all(&temp);
         std::fs::create_dir_all(&temp).unwrap();
         let value = index("aarch64-linux-android");
