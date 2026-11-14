@@ -136,6 +136,24 @@ pub fn read_hmod<R: Read + Seek>(reader: R) -> Result<Hmod, Error> {
             return Err(Error::Manifest("mod.wasm does not match [wasm].sha512".into()));
         }
     }
+    if let Some(native) = &manifest.native {
+        if !files.contains_key("Cargo.toml") || !files.contains_key("src/lib.rs") {
+            return Err(Error::Manifest("a native .hmod needs root Cargo.toml and src/lib.rs".into()));
+        }
+        for row in native.mixin.iter().chain(&native.loops) {
+            if let Some(helper) = row.options.get("helper").and_then(toml::Value::as_str) {
+                let path = std::path::Path::new(helper);
+                if !helper.starts_with("src/") || path.is_absolute()
+                    || !path.components().all(|part| matches!(part, std::path::Component::Normal(_)))
+                    || !files.contains_key(helper)
+                {
+                    return Err(Error::Manifest(format!("{}: helper must be an existing file under src/", row.id)));
+                }
+            } else {
+                return Err(Error::Manifest(format!("{}: missing helper path", row.id)));
+            }
+        }
+    }
     let sha256 = digest(&files);
     Ok(Hmod { manifest, files, sha256 })
 }
@@ -224,7 +242,11 @@ mod tests {
         assert!(read_hmod(bad).is_err());
     }
     #[test] fn inspect_picks_format() {
-        let hmod = zip_of(&[(HMOD_MANIFEST, native_toml("").as_bytes()), ("src/lib.rs", b"//")]);
+        let hmod = zip_of(&[
+            (HMOD_MANIFEST, native_toml("").as_bytes()),
+            ("Cargo.toml", b"[package]\nname = \"demo\"\nversion = \"1.0.0\"\nedition = \"2024\"\n"),
+            ("src/lib.rs", b"//"),
+        ]);
         assert!(matches!(inspect(hmod).unwrap(), Inspected::Hmod { kind: "native", .. }));
         let manifest = format!("{{\"id\":\"old_mod\",\"game\":\"26.3\",\"horizon\":\"{}\",\"mixins\":\"{}\"}}", "a".repeat(40), "b".repeat(40));
         let mixin = "[mod]\nid = \"old_mod\"\nversion = \"1.0.0\"\n";
