@@ -99,7 +99,7 @@ def verify_signature(item: dict, archive: Path, temp: Path, minisign: str, allow
     return True
 
 
-def inspect_hmod(cli: str, item: dict, archive: Path) -> None:
+def inspect_hmod(cli: str, item: dict, archive: Path, expected_game: str) -> None:
     result = subprocess.run([cli, "inspect", str(archive)], capture_output=True, text=True)
     if result.returncode:
         fail(f"{item['id']}: HMOD validation failed: {(result.stderr or result.stdout).strip()}")
@@ -109,6 +109,12 @@ def inspect_hmod(cli: str, item: dict, archive: Path) -> None:
         fail(f"{item['id']}: HMOD validator returned invalid JSON: {error}")
     if report.get("format") != "hmod" or report.get("id") != item["id"] or report.get("version") != item["version"]:
         fail(f"{item['id']}: downloaded package identity differs from its registry pin")
+    if report.get("api") != item["api"] or report.get("side") != item["side"]:
+        fail(f"{item['id']}: HMOD API or side differs from the registry index")
+    if set(report.get("capabilities", [])) != set(item.get("capabilities", [])):
+        fail(f"{item['id']}: HMOD capabilities differ from the registry index")
+    if report.get("game") is not None and report.get("game") != expected_game:
+        fail(f"{item['id']}: native HMOD game version differs from the modpack target")
     expected_kind = "native" if item["kind"] == "native-mod" else None
     if expected_kind and report.get("kind") != expected_kind:
         fail(f"{item['id']}: registry lists a native mod but the package is {report.get('kind')}")
@@ -283,7 +289,7 @@ def install(args) -> dict:
                 signed_count += 1
             else:
                 unsigned.append(item["id"])
-            inspect_hmod(args.hnmod_cli, item, archive)
+            inspect_hmod(args.hnmod_cli, item, archive, plan["game"])
             directory = "horizon-native-mods" if item["kind"] == "native-mod" else "horizon-mods"
             relative = f"{directory}/{item['id']}.hmod"
             target = new_root / safe_relative(relative)
