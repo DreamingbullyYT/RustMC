@@ -43,6 +43,37 @@ env:
   RUST_TARGET: aarch64-linux-android
 
 jobs:
+  kotlin-check:
+    name: Compile Kotlin and Compose (no APK)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-34 build-tools;34.0.0 ndk;26.3.11579264"
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - name: Compile Kotlin/Compose without building native libraries or APK
+        run: gradle :app:compileDebugKotlin --no-daemon --stacktrace
+      - name: Verify Hpack import is connected to the Compile screen
+        run: |
+          grep -q 'onInstallHpack' app/src/main/java/dev/horizon/launcher/MainActivity.kt
+          grep -q 'confirmAndInstallHpack' app/src/main/java/dev/horizon/launcher/MainActivity.kt
+          grep -q 'EmbeddedToolchain.installHpack' app/src/main/java/dev/horizon/launcher/MainActivity.kt
+          grep -q 'onInstallHpack' app/src/main/java/dev/horizon/launcher/ui/HorizonLauncherUi.kt
+          grep -q 'fetchOfficialIndex' app/src/main/java/dev/horizon/launcher/data/HpackBuildAdapter.kt
+          grep -q 'Allow unsigned' app/src/main/java/dev/horizon/launcher/MainActivity.kt
+
   apk:
     name: Build APK
     # Keep APK builds out of incremental compiler PR work. Build on main, version tags,
