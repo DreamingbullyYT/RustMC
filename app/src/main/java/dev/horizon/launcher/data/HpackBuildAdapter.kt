@@ -26,7 +26,7 @@ object HpackBuildAdapter {
         val input = File(state, "hpack-input")
         input.deleteRecursively()
         require(input.isDirectory || input.mkdirs()) { "Cannot create private Hpack input directory." }
-        try {
+        return try {
             val pack = copyUri(context, packUri, File(input, "selected.hpack"), MAX_PACK_BYTES, "Hpack")
             onLogLine(if (indexUri == null) "Refreshing official Horizon mod registry index" else "Using selected registry index")
             val index = if (indexUri != null) {
