@@ -9,6 +9,7 @@ on:
       - "android/android.patch"
       - "android/overlay/**"
       - "app/src/main/assets/hnmod/android/**"
+      - "app/src/main/assets/hnmod/hnmod-core/**"
       - "app/src/main/java/dev/horizon/launcher/data/**"
       - "app/src/main/java/dev/horizon/launcher/MainActivity.kt"
       - "app/src/main/java/dev/horizon/launcher/ui/**"
